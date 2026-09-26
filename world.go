@@ -1,6 +1,9 @@
 package main
 
-import "slices"
+import (
+	"math/rand/v2"
+	"slices"
+)
 
 // Tuning knobs shared by all bodies. Per-body ones live in kinds.
 const (
@@ -55,7 +58,10 @@ type World struct {
 	Monsters  []*Entity
 	Shots     []Shot
 	SparkLeft int // turns left to find a body while the player is a bare spark
+	Depth     int // current floor, 1 to floors
 	Over      bool
+	Won       bool // took the stairs down from the last floor
+	rng       *rand.Rand
 	decay     int // turns since the current body last decayed
 	acted     int // player actions taken so far this turn
 }
@@ -73,6 +79,26 @@ func NewWorld(level []string) *World {
 		}
 	}
 	return w
+}
+
+// NewGame starts a run on a generated first floor. The same seed always builds the same floors.
+func NewGame(seed uint64) *World {
+	rng := rand.New(rand.NewPCG(seed, 0))
+	w := NewWorld(generate(rng, 1))
+	w.rng, w.Depth = rng, 1
+	return w
+}
+
+// descend moves the player, in whatever body it has, to the start of a freshly generated next floor.
+func (w *World) descend() {
+	if w.Depth == floors {
+		w.Over, w.Won = true, true
+		return
+	}
+	next := NewWorld(generate(w.rng, w.Depth+1))
+	w.Player.X, w.Player.Y = next.Player.X, next.Player.Y
+	w.Level, w.Monsters, w.Depth = next.Level, next.Monsters, w.Depth+1
+	w.acted = 0
 }
 
 func (w *World) IsSpark() bool { return w.Player.Name == "spark" }
@@ -93,6 +119,10 @@ func (w *World) Step(dx, dy int) {
 	waited := dx == 0 && dy == 0
 	if !waited {
 		w.playerAct(dx, dy)
+		if w.Level[w.Player.Y][w.Player.X] == '>' {
+			w.descend()
+			return
+		}
 	}
 	if w.acted++; !waited && w.acted < w.Player.Moves {
 		return

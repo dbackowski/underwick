@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io/fs"
 	"log"
+	"math/rand/v2"
 	"os"
 	"slices"
 	"strings"
@@ -20,8 +21,7 @@ import (
 
 const (
 	tile     = 12
-	mapH     = 15
-	screenW  = 20 * tile
+	screenW  = mapW * tile
 	screenH  = (mapH + 1) * tile // one extra row for the HUD
 	scale    = 4
 	animTime = 12 // ticks a walk/attack animation plays after a turn
@@ -32,22 +32,11 @@ const (
 //go:embed assets
 var assets embed.FS
 
-var level = []string{
-	"####################",
-	"#..................#",
-	"#...r..........o...#",
-	"#....####..........#",
-	"#....#.............#",
-	"#....#......@......#",
-	"#..................#",
-	"#..........#.......#",
-	"#..r.......#...a...#",
-	"#..........#####...#",
-	"#..................#",
-	"#......a...........#",
-	"#..............r...#",
-	"#..................#",
-	"####################",
+// Tile set per floor, top to bottom: the wall and stairs set, and the floor drawn with it.
+var themes = [floors]struct{ wall, floor string }{
+	{"grey", "grey"}, {"dirt", "dirt"}, {"cave", "dark"},
+	{"hedge", "moss"}, {"stone", "grey"}, {"red", "red"},
+	{"frost", "frost"}, {"ice", "cold"}, {"turret", "mud"},
 }
 
 var shot = flag.String("shot", "", "save one rendered frame to this PNG and exit, to check rendering without a screen capture")
@@ -93,7 +82,7 @@ func (g *Game) Update() error {
 	g.tick++
 	if g.world.Over {
 		if justPressed(ebiten.KeyR) {
-			g.world = NewWorld(level)
+			g.world = NewGame(rand.Uint64())
 		}
 		return nil
 	}
@@ -120,11 +109,15 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	w := g.world
+	theme := themes[w.Depth-1]
 	for y, row := range w.Level {
 		for x, c := range row {
-			name := "World/floor_grey"
-			if c == '#' {
-				name = "World/wall_block_grey"
+			name := "World/floor_" + theme.floor
+			switch c {
+			case '#':
+				name = "World/wall_block_" + theme.wall
+			case '>':
+				name = "World/stair_down_" + theme.wall
 			}
 			g.draw(screen, name, x, y, 1)
 		}
@@ -169,7 +162,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			g.draw(screen, name, i, mapH, 1)
 		}
 	}
-	if w.Over {
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Deep %d/%d", w.Depth, floors), screenW-60, mapH*tile-3)
+	switch {
+	case w.Won:
+		ebitenutil.DebugPrintAt(screen, "You reached the ninth deep. R to play again.", 0, 80)
+	case w.Over:
 		ebitenutil.DebugPrintAt(screen, "The spark fades. R to retry.", 50, 80)
 	}
 	if *shot != "" && g.tick > 30 { // let a few idle frames pass first
@@ -234,7 +231,7 @@ func main() {
 	flag.Parse()
 	ebiten.SetWindowSize(screenW*scale, screenH*scale)
 	ebiten.SetWindowTitle("Ninedeep")
-	if err := ebiten.RunGame(&Game{sprites: loadSprites(), world: NewWorld(level)}); err != nil {
+	if err := ebiten.RunGame(&Game{sprites: loadSprites(), world: NewGame(rand.Uint64())}); err != nil {
 		log.Fatal(err)
 	}
 }

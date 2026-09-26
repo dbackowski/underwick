@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"math/rand/v2"
+	"strings"
+	"testing"
+)
 
 // One run through the core loop: break a rat, possess it, let the body rot, fade as a spark.
 func TestPossessionLoop(t *testing.T) {
@@ -75,5 +79,66 @@ func TestBodies(t *testing.T) {
 	w.Step(0, 0)
 	if w.Player.HP != 9 {
 		t.Fatalf("orc body should lose 1 HP after 2 turns, got %d", w.Player.HP)
+	}
+}
+
+// Every generated floor must be walled in, have one start and one stairs, and be fully connected.
+func TestGenerate(t *testing.T) {
+	for seed := range uint64(200) {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		for depth := 1; depth <= floors; depth++ {
+			level := generate(rng, depth)
+			all := strings.Join(level, "")
+			if len(level) != mapH || len(all) != mapW*mapH ||
+				strings.Count(all, "@") != 1 || strings.Count(all, ">") != 1 ||
+				level[0] != strings.Repeat("#", mapW) || level[mapH-1] != level[0] {
+				t.Fatalf("seed %d depth %d: malformed floor\n%s", seed, depth, strings.Join(level, "\n"))
+			}
+			for _, row := range level {
+				if row[0] != '#' || row[mapW-1] != '#' {
+					t.Fatalf("seed %d depth %d: open side wall\n%s", seed, depth, strings.Join(level, "\n"))
+				}
+			}
+
+			// Flood fill from the start must reach every open tile.
+			start := strings.IndexByte(all, '@')
+			seen := map[int]bool{start: true}
+			for queue := []int{start}; len(queue) > 0; queue = queue[1:] {
+				for _, n := range []int{queue[0] - 1, queue[0] + 1, queue[0] - mapW, queue[0] + mapW} {
+					if all[n] != '#' && !seen[n] {
+						seen[n] = true
+						queue = append(queue, n)
+					}
+				}
+			}
+			if open := len(all) - strings.Count(all, "#"); len(seen) != open {
+				t.Fatalf("seed %d depth %d: reached %d of %d open tiles\n%s", seed, depth, len(seen), open, strings.Join(level, "\n"))
+			}
+		}
+	}
+}
+
+func TestStairs(t *testing.T) {
+	w := NewWorld([]string{
+		"####",
+		"#@>#",
+		"####",
+	})
+	w.rng, w.Depth = rand.New(rand.NewPCG(1, 0)), 1
+	body := w.Player
+	w.Step(1, 0)
+	if w.Depth != 2 || w.Player != body || w.Level[body.Y][body.X] != '@' {
+		t.Fatalf("stairs should take the same body to the start of floor 2, got depth %d at %d,%d", w.Depth, body.X, body.Y)
+	}
+
+	w = NewWorld([]string{
+		"####",
+		"#@>#",
+		"####",
+	})
+	w.Depth = floors
+	w.Step(1, 0)
+	if !w.Over || !w.Won {
+		t.Fatal("stairs on the last floor should win the run")
 	}
 }
