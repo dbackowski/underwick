@@ -12,7 +12,13 @@ The sprites are from Oryx Design Lab's [8-Bit Remaster](https://www.oryxdesignla
 
     go run .
 
-Move with arrow keys or WASD.
+Arrow keys or WASD move and attack, space waits a turn, R restarts after death.
+
+You are a spark in a borrowed body (outlined in blue). The body rots 1 HP every few turns.
+Beat a monster down to a third of its HP (it blinks) and walk into it to take it over.
+If your body dies you have 3 turns as a bare spark to find a new one.
+
+`go run . -shot frame.png` saves one rendered frame and exits, for checking rendering.
 
 ## Credits
 
