@@ -2,95 +2,98 @@ package main
 
 import "slices"
 
-// Tuning knobs.
+// Tuning knobs shared by all bodies. Per-body ones live in kinds.
 const (
-	decayEvery = 4 // a possessed body loses 1 HP every this many player turns
 	sparkTurns = 3 // turns a bare spark survives without a body
 	sight      = 6 // how far (in steps) monsters notice the player
 )
 
-// kinds maps a level character to a body type. The name doubles as the sprite prefix.
-var kinds = map[byte]struct {
-	name    string
-	hp, dmg int
-}{
-	'r': {"rat", 3, 1},
-	'g': {"gobwar", 6, 2},
-	'o': {"orc", 10, 3},
+// Kind is a body type. Name doubles as the sprite prefix.
+type Kind struct {
+	Name  string
+	MaxHP int
+	Dmg   int
+	Moves int // actions per turn
+	Range int // attack reach along a straight line: 1 is melee, more shoots arrows
+	Decay int // a possessed body loses 1 HP every this many turns
 }
 
+// kinds maps a level character to a body type.
+var kinds = map[byte]Kind{
+	'r': {Name: "rat", MaxHP: 3, Dmg: 1, Moves: 2, Range: 1, Decay: 4},       // fast and fragile
+	'a': {Name: "gobarcher", MaxHP: 5, Dmg: 2, Moves: 1, Range: 5, Decay: 4}, // shoots down a line
+	'o': {Name: "orc", MaxHP: 10, Dmg: 3, Moves: 1, Range: 1, Decay: 2},      // strong, rots twice as fast
+}
+
+var spark = Kind{Name: "spark", MaxHP: 1, Moves: 1}
+
 type Entity struct {
-	Kind      string
-	X, Y      int
-	HP, MaxHP int
-	Dmg       int
-	Dir       string // l, r, u, d
-	Anim      string // what it did this turn: idle, walk, atk
+	Kind
+	X, Y int
+	HP   int
+	Dir  string // l, r, u, d
+	Anim string // what it did this step: idle, walk, atk
+}
+
+func newEntity(k Kind, x, y int) *Entity {
+	return &Entity{Kind: k, X: x, Y: y, HP: k.MaxHP, Dir: "d", Anim: "idle"}
 }
 
 // Broken bodies can be possessed and are too hurt to act.
 func (e *Entity) Broken() bool { return e.HP > 0 && e.HP*3 <= e.MaxHP }
 
+// Shot is an arrow fired this step, kept for the renderer.
+type Shot struct{ FromX, FromY, ToX, ToY int }
+
 type World struct {
 	Level     []string
 	Player    *Entity // a spark, or the body it possesses
 	Monsters  []*Entity
+	Shots     []Shot
 	SparkLeft int // turns left to find a body while the player is a bare spark
 	Over      bool
 	decay     int // turns since the current body last decayed
+	acted     int // player actions taken so far this turn
 }
 
-// NewWorld parses a level: '#' wall, '@' player (in a goblin warrior body), kind letters for monsters.
+// NewWorld parses a level: '#' wall, '@' player (in a goblin archer body), kind letters for monsters.
 func NewWorld(level []string) *World {
 	w := &World{Level: level}
 	for y, row := range level {
 		for x := range row {
-			c := row[x]
-			if c == '@' {
-				c = 'g'
-			}
-			k, ok := kinds[c]
-			if !ok {
-				continue
-			}
-			e := &Entity{Kind: k.name, X: x, Y: y, HP: k.hp, MaxHP: k.hp, Dmg: k.dmg, Dir: "d", Anim: "idle"}
 			if row[x] == '@' {
-				w.Player = e
-			} else {
-				w.Monsters = append(w.Monsters, e)
+				w.Player = newEntity(kinds['a'], x, y)
+			} else if k, ok := kinds[row[x]]; ok {
+				w.Monsters = append(w.Monsters, newEntity(k, x, y))
 			}
 		}
 	}
 	return w
 }
 
-func (w *World) IsSpark() bool { return w.Player.Kind == "spark" }
+func (w *World) IsSpark() bool { return w.Player.Name == "spark" }
 
-// Step runs one full turn: the player acts (dx, dy of 0, 0 waits), then every monster.
+// Step is one player action (dx, dy of 0, 0 waits out the rest of the turn).
+// The turn ends, and monsters act, once the body has used all its moves.
 func (w *World) Step(dx, dy int) {
 	if w.Over {
 		return
 	}
+	w.Shots = nil
 	w.Player.Anim = "idle"
 	for _, m := range w.Monsters {
 		m.Anim = "idle"
 	}
 
 	body := w.Player
-	if dx != 0 || dy != 0 {
-		p := w.Player
-		p.Dir = dirName(dx, dy)
-		tx, ty := p.X+dx, p.Y+dy
-		if m := w.monsterAt(tx, ty); m != nil {
-			if m.Broken() {
-				w.possess(m)
-			} else if !w.IsSpark() {
-				w.hit(p, m)
-			}
-		} else if w.free(tx, ty) {
-			p.X, p.Y, p.Anim = tx, ty, "walk"
-		}
+	waited := dx == 0 && dy == 0
+	if !waited {
+		w.playerAct(dx, dy)
 	}
+	if w.acted++; !waited && w.acted < w.Player.Moves {
+		return
+	}
+	w.acted = 0
 
 	if w.IsSpark() {
 		w.SparkLeft--
@@ -99,14 +102,31 @@ func (w *World) Step(dx, dy int) {
 			return
 		}
 	} else if w.Player == body { // a body possessed this turn starts decaying next turn
-		if w.decay++; w.decay >= decayEvery {
+		if w.decay++; w.decay >= w.Player.Decay {
 			w.decay = 0
 			w.damage(w.Player, 1)
 		}
 	}
 
 	for _, m := range w.Monsters {
-		w.act(m)
+		for range m.Moves {
+			w.act(m)
+		}
+	}
+}
+
+func (w *World) playerAct(dx, dy int) {
+	p := w.Player
+	p.Dir = dirName(dx, dy)
+	if t := w.firstInLine(p, dx, dy, p.Range); t != nil && !t.Broken() {
+		w.attack(p, t)
+		return
+	}
+	tx, ty := p.X+dx, p.Y+dy
+	if m := w.monsterAt(tx, ty); m != nil && m.Broken() {
+		w.possess(m)
+	} else if w.free(tx, ty) {
+		p.X, p.Y, p.Anim = tx, ty, "walk"
 	}
 }
 
@@ -116,11 +136,13 @@ func (w *World) act(m *Entity) {
 	}
 	p := w.Player
 	dx, dy := p.X-m.X, p.Y-m.Y
-	switch dist := abs(dx) + abs(dy); {
-	case dist == 1 && !w.IsSpark():
+	dist := abs(dx) + abs(dy)
+	if !w.IsSpark() && (dx == 0 || dy == 0) && w.firstInLine(m, sign(dx), sign(dy), m.Range) == p {
 		m.Dir = dirName(dx, dy)
-		w.hit(m, p)
-	case dist > 1 && dist <= sight:
+		w.attack(m, p)
+		return
+	}
+	if dist > 1 && dist <= sight {
 		// ponytail: greedy chase with no line of sight or pathfinding, so monsters sense through walls and get stuck on them; add both when levels get twisty
 		sx, sy := sign(dx), sign(dy)
 		steps := [][2]int{{sx, 0}, {0, sy}}
@@ -136,8 +158,28 @@ func (w *World) act(m *Entity) {
 	}
 }
 
-func (w *World) hit(attacker, target *Entity) {
+// firstInLine returns the first creature within n tiles of from in direction dx, dy, stopping at walls.
+func (w *World) firstInLine(from *Entity, dx, dy, n int) *Entity {
+	for i := 1; i <= n; i++ {
+		x, y := from.X+dx*i, from.Y+dy*i
+		if w.Level[y][x] == '#' {
+			return nil
+		}
+		if w.Player.X == x && w.Player.Y == y {
+			return w.Player
+		}
+		if m := w.monsterAt(x, y); m != nil {
+			return m
+		}
+	}
+	return nil
+}
+
+func (w *World) attack(attacker, target *Entity) {
 	attacker.Anim = "atk"
+	if abs(target.X-attacker.X)+abs(target.Y-attacker.Y) > 1 {
+		w.Shots = append(w.Shots, Shot{attacker.X, attacker.Y, target.X, target.Y})
+	}
 	w.damage(target, attacker.Dmg)
 }
 
@@ -148,7 +190,8 @@ func (w *World) damage(e *Entity, n int) {
 	}
 	if e == w.Player {
 		// The body dies and the spark is thrown out onto the same tile.
-		w.Player = &Entity{Kind: "spark", X: e.X, Y: e.Y, HP: 1, MaxHP: 1, Dir: e.Dir, Anim: "idle"}
+		w.Player = newEntity(spark, e.X, e.Y)
+		w.Player.Dir = e.Dir
 		w.SparkLeft = sparkTurns
 		return
 	}

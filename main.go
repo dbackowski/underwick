@@ -41,10 +41,10 @@ var level = []string{
 	"#....#......@......#",
 	"#..................#",
 	"#..........#.......#",
-	"#..r.......#...g...#",
+	"#..r.......#...a...#",
 	"#..........#####...#",
 	"#..................#",
-	"#......g...........#",
+	"#......a...........#",
 	"#..............r...#",
 	"#..................#",
 	"####################",
@@ -139,6 +139,22 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// A possessed body gets a spark-blue outline, so it stands out from monsters of the same kind.
 	g.drawEntity(screen, w.Player, 1, !w.IsSpark())
 
+	// Arrows fly from shooter to target while the turn's animation plays.
+	if since := g.tick - g.turnTick; since < animTime {
+		t := float64(since) / animTime
+		for _, s := range w.Shots {
+			name := "FX/arrow_x"
+			if s.FromX == s.ToX {
+				name = "FX/arrow_y"
+			}
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Translate( // FX sprites are 8px, centred in the 12px tile
+				float64(s.FromX*tile)+float64((s.ToX-s.FromX)*tile)*t+2,
+				float64(s.FromY*tile)+float64((s.ToY-s.FromY)*tile)*t+2)
+			screen.DrawImage(g.sprite(name), op)
+		}
+	}
+
 	// HUD: the body's hearts, or the spark's remaining turns.
 	if w.IsSpark() {
 		for i := range w.SparkLeft {
@@ -181,7 +197,7 @@ func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, alpha float32, outlined 
 	if since >= animTime {
 		anim, frame = "idle", g.tick/20%2+1
 	}
-	name := fmt.Sprintf("Character/%s_%s_%s_%d", e.Kind, anim, e.Dir, frame)
+	name := fmt.Sprintf("Character/%s_%s_%s_%d", e.Name, anim, e.Dir, frame)
 	if outlined {
 		// Draw a solid blue silhouette shifted 1px in each direction, then the sprite over it.
 		var cm colorm.ColorM
