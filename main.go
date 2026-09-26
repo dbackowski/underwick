@@ -144,13 +144,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		t := float64(since) / animTime
 		for _, s := range w.Shots {
 			name := "FX/arrow_x"
-			if s.FromX == s.ToX {
+			if s.FromX == s.To.X {
 				name = "FX/arrow_y"
 			}
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Translate( // FX sprites are 8px, centred in the 12px tile
-				float64(s.FromX*tile)+float64((s.ToX-s.FromX)*tile)*t+2,
-				float64(s.FromY*tile)+float64((s.ToY-s.FromY)*tile)*t+2)
+				float64(s.FromX*tile)+float64((s.To.X-s.FromX)*tile)*t+2,
+				float64(s.FromY*tile)+float64((s.To.Y-s.FromY)*tile)*t+2)
 			screen.DrawImage(g.sprite(name), op)
 		}
 	}

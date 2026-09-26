@@ -43,7 +43,11 @@ func newEntity(k Kind, x, y int) *Entity {
 func (e *Entity) Broken() bool { return e.HP > 0 && e.HP*3 <= e.MaxHP }
 
 // Shot is an arrow fired this step, kept for the renderer.
-type Shot struct{ FromX, FromY, ToX, ToY int }
+// It points at the target itself, which may have moved or died by the time the arrow is drawn.
+type Shot struct {
+	FromX, FromY int
+	To           *Entity
+}
 
 type World struct {
 	Level     []string
@@ -178,7 +182,7 @@ func (w *World) firstInLine(from *Entity, dx, dy, n int) *Entity {
 func (w *World) attack(attacker, target *Entity) {
 	attacker.Anim = "atk"
 	if abs(target.X-attacker.X)+abs(target.Y-attacker.Y) > 1 {
-		w.Shots = append(w.Shots, Shot{attacker.X, attacker.Y, target.X, target.Y})
+		w.Shots = append(w.Shots, Shot{attacker.X, attacker.Y, target})
 	}
 	w.damage(target, attacker.Dmg)
 }
