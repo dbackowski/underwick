@@ -16,7 +16,8 @@ Arrow keys or WASD move and attack, space waits a turn, R restarts after death.
 
 You are a spark in a borrowed body (outlined in blue). The body rots 1 HP every few turns.
 Beat a monster down to a third of its HP (it blinks) and walk into it to take it over.
-If your body dies you have 3 turns as a bare spark to find a new one.
+If your body dies the spark tears free, breaking every monster next to it, and moves twice per turn.
+You have 3 turns to take a new body. A broken monster that nobody takes falls apart after 6 turns.
 
 Monsters within 6 tiles notice you only if they can see you, then hunt you down to where they last saw you.
 
@@ -25,6 +26,8 @@ Each floor is generated. Take the stairs down to reach the next one; the ninth i
 Bodies: the goblin archer shoots anything in a straight line up to 5 tiles away, the rat moves twice per turn, and the orc hits hard but rots twice as fast.
 
 `go run . -shot frame.png` saves one rendered frame and exits, for checking rendering.
+
+`NINEDEEP_SIM=1 go test -run Balance -v` plays 300 seeded runs with two simple bots and prints win rates, for tuning.
 
 ## Credits
 

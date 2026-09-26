@@ -71,14 +71,15 @@ func TestBodies(t *testing.T) {
 		t.Fatalf("rat should be at 3 and orc chasing to 7, got rat=%d orc=%d", w.Player.X, w.Monsters[0].X)
 	}
 
-	// Orc: rots every 2 turns instead of 4.
+	// Orc: rots twice as fast as the others.
 	w = NewWorld(level)
 	w.Player.Kind = kinds['o']
 	w.Player.HP = 10
-	w.Step(0, 0)
-	w.Step(0, 0)
+	for range kinds['a'].Decay / 2 {
+		w.Step(0, 0)
+	}
 	if w.Player.HP != 9 {
-		t.Fatalf("orc body should lose 1 HP after 2 turns, got %d", w.Player.HP)
+		t.Fatalf("orc body should lose 1 HP in half the usual time, got %d", w.Player.HP)
 	}
 }
 
@@ -168,5 +169,38 @@ func TestSightAndPaths(t *testing.T) {
 	w.Step(0, 0)
 	if orc.X != 2 || orc.Y != 3 {
 		t.Fatalf("orc should head right, around the wall, got %d,%d", orc.X, orc.Y)
+	}
+}
+
+func TestBurstAndCrumble(t *testing.T) {
+	// A body killed in melee breaks its killer, which the spark can take right away.
+	w := NewWorld([]string{
+		"#####",
+		"#@o.#",
+		"#####",
+	})
+	w.Player.HP = 1
+	w.Step(0, 0) // the orc kills the archer
+	orc := w.Monsters[0]
+	if !w.IsSpark() || !orc.Broken() {
+		t.Fatalf("spark should tear free and break the orc, got player %+v orc %+v", w.Player, orc)
+	}
+	w.Step(1, 0)
+	if w.Player != orc {
+		t.Fatalf("spark should possess the broken orc, got %+v", w.Player)
+	}
+
+	// A broken monster nobody takes falls apart.
+	w = NewWorld([]string{
+		"#######",
+		"#@...r#",
+		"#######",
+	})
+	w.Monsters[0].HP = 1
+	for range crumble + 1 {
+		w.Step(0, 0)
+	}
+	if len(w.Monsters) != 0 {
+		t.Fatalf("broken rat should crumble after %d turns", crumble)
 	}
 }

@@ -9,6 +9,7 @@ import (
 const (
 	sparkTurns = 3 // turns a bare spark survives without a body
 	sight      = 6 // how far (in steps) monsters notice the player
+	crumble    = 6 // turns a broken monster lasts before it falls apart, if nobody possesses it
 )
 
 // Kind is a body type. Name doubles as the sprite prefix.
@@ -23,12 +24,12 @@ type Kind struct {
 
 // kinds maps a level character to a body type.
 var kinds = map[byte]Kind{
-	'r': {Name: "rat", MaxHP: 3, Dmg: 1, Moves: 2, Range: 1, Decay: 4},       // fast and fragile
-	'a': {Name: "gobarcher", MaxHP: 5, Dmg: 2, Moves: 1, Range: 5, Decay: 4}, // shoots down a line
-	'o': {Name: "orc", MaxHP: 10, Dmg: 3, Moves: 1, Range: 1, Decay: 2},      // strong, rots twice as fast
+	'r': {Name: "rat", MaxHP: 3, Dmg: 1, Moves: 2, Range: 1, Decay: 8},       // fast and fragile
+	'a': {Name: "gobarcher", MaxHP: 5, Dmg: 2, Moves: 1, Range: 5, Decay: 8}, // shoots down a line
+	'o': {Name: "orc", MaxHP: 10, Dmg: 3, Moves: 1, Range: 1, Decay: 4},      // strong, rots twice as fast
 }
 
-var spark = Kind{Name: "spark", MaxHP: 1, Moves: 1}
+var spark = Kind{Name: "spark", MaxHP: 1, Moves: 2} // quick, to reach a body in time
 
 type Entity struct {
 	Kind
@@ -37,9 +38,10 @@ type Entity struct {
 	Dir  string // l, r, u, d
 	Anim string // what it did this step: idle, walk, atk
 
-	// Monsters only: where the player was last seen, while hunting it.
+	// Monsters only: where the player was last seen, while hunting it, and turns spent broken.
 	hunting      bool
 	goalX, goalY int
+	brokenFor    int
 }
 
 func newEntity(k Kind, x, y int) *Entity {
@@ -146,6 +148,12 @@ func (w *World) Step(dx, dy int) {
 		}
 	}
 
+	w.Monsters = slices.DeleteFunc(w.Monsters, func(m *Entity) bool {
+		if m.Broken() {
+			m.brokenFor++
+		}
+		return m.brokenFor > crumble
+	})
 	for _, m := range w.Monsters {
 		for range m.Moves {
 			w.act(m)
@@ -274,7 +282,13 @@ func (w *World) damage(e *Entity, n int) {
 		return
 	}
 	if e == w.Player {
-		// The body dies and the spark is thrown out onto the same tile.
+		// The body dies and the spark tears free onto the same tile, breaking every monster next to it,
+		// so a spark killed in melee always has a body in reach.
+		for _, m := range w.Monsters {
+			if abs(m.X-e.X)+abs(m.Y-e.Y) == 1 {
+				m.HP = min(m.HP, max(1, m.MaxHP/3))
+			}
+		}
 		w.Player = newEntity(spark, e.X, e.Y)
 		w.Player.Dir = e.Dir
 		w.SparkLeft = sparkTurns
@@ -286,7 +300,7 @@ func (w *World) damage(e *Entity, n int) {
 // possess moves the spark into m, restoring the body to full HP. Any previous body is left behind to rot.
 func (w *World) possess(m *Entity) {
 	w.Monsters = slices.DeleteFunc(w.Monsters, func(e *Entity) bool { return e == m })
-	m.HP, m.Dir, m.Anim = m.MaxHP, w.Player.Dir, "idle"
+	m.HP, m.Dir, m.Anim, m.brokenFor = m.MaxHP, w.Player.Dir, "idle", 0
 	w.Player = m
 	w.decay = 0
 }
