@@ -142,3 +142,31 @@ func TestStairs(t *testing.T) {
 		t.Fatal("stairs on the last floor should win the run")
 	}
 }
+
+func TestSightAndPaths(t *testing.T) {
+	// An orc behind a wall doesn't notice the player, though it is well within range.
+	w := NewWorld([]string{
+		"#######",
+		"#@.#.o#",
+		"#######",
+	})
+	w.Step(0, 0)
+	if orc := w.Monsters[0]; orc.X != 5 || orc.hunting {
+		t.Fatalf("orc without line of sight should stay put, got %+v", orc)
+	}
+
+	// Once hunting, a monster walks around a wall even when that means first moving away.
+	w = NewWorld([]string{
+		"#######",
+		"#@....#",
+		"#####.#",
+		"#o....#",
+		"#######",
+	})
+	orc := w.Monsters[0]
+	orc.hunting, orc.goalX, orc.goalY = true, 1, 1
+	w.Step(0, 0)
+	if orc.X != 2 || orc.Y != 3 {
+		t.Fatalf("orc should head right, around the wall, got %d,%d", orc.X, orc.Y)
+	}
+}

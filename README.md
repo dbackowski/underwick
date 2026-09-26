@@ -18,6 +18,8 @@ You are a spark in a borrowed body (outlined in blue). The body rots 1 HP every 
 Beat a monster down to a third of its HP (it blinks) and walk into it to take it over.
 If your body dies you have 3 turns as a bare spark to find a new one.
 
+Monsters within 6 tiles notice you only if they can see you, then hunt you down to where they last saw you.
+
 Each floor is generated. Take the stairs down to reach the next one; the ninth is the bottom.
 
 Bodies: the goblin archer shoots anything in a straight line up to 5 tiles away, the rat moves twice per turn, and the orc hits hard but rots twice as fast.

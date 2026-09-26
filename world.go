@@ -36,6 +36,10 @@ type Entity struct {
 	HP   int
 	Dir  string // l, r, u, d
 	Anim string // what it did this step: idle, walk, atk
+
+	// Monsters only: where the player was last seen, while hunting it.
+	hunting      bool
+	goalX, goalY int
 }
 
 func newEntity(k Kind, x, y int) *Entity {
@@ -176,20 +180,67 @@ func (w *World) act(m *Entity) {
 		w.attack(m, p)
 		return
 	}
-	if dist > 1 && dist <= sight {
-		// ponytail: greedy chase with no line of sight or pathfinding, so monsters sense through walls and get stuck on them; add both when levels get twisty
-		sx, sy := sign(dx), sign(dy)
-		steps := [][2]int{{sx, 0}, {0, sy}}
-		if abs(dy) > abs(dx) {
-			steps[0], steps[1] = steps[1], steps[0]
+	if dist <= sight && w.canSee(m.X, m.Y, p.X, p.Y) {
+		m.hunting, m.goalX, m.goalY = true, p.X, p.Y
+	}
+	if !m.hunting {
+		return
+	}
+	if m.X == m.goalX && m.Y == m.goalY {
+		m.hunting = false // reached the last sighting and the player is gone
+		return
+	}
+	if sx, sy, ok := w.stepToward(m.X, m.Y, m.goalX, m.goalY); ok {
+		m.X, m.Y, m.Dir, m.Anim = m.X+sx, m.Y+sy, dirName(sx, sy), "walk"
+	}
+}
+
+var dirs = [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+
+// canSee reports whether no wall lies on the straight (Bresenham) line between two tiles.
+// The line steps along one axis at a time, so it can't slip through a diagonal gap between two walls.
+func (w *World) canSee(x0, y0, x1, y1 int) bool {
+	dx, dy := abs(x1-x0), -abs(y1-y0)
+	sx, sy := sign(x1-x0), sign(y1-y0)
+	e := dx + dy
+	for x0 != x1 || y0 != y1 {
+		if w.Level[y0][x0] == '#' {
+			return false
 		}
-		for _, s := range steps {
-			if (s[0] != 0 || s[1] != 0) && w.free(m.X+s[0], m.Y+s[1]) {
-				m.X, m.Y, m.Dir, m.Anim = m.X+s[0], m.Y+s[1], dirName(s[0], s[1]), "walk"
-				break
+		if e2 := 2 * e; e2 >= dy {
+			e, x0 = e+dy, x0+sx
+		} else if e2 <= dx {
+			e, y0 = e+dx, y0+sy
+		}
+	}
+	return true
+}
+
+// stepToward returns a free first step on a shortest path from x, y to gx, gy. Paths go around walls
+// but through creatures, so a monster stuck behind another one waits its turn rather than detouring.
+func (w *World) stepToward(x, y, gx, gy int) (dx, dy int, ok bool) {
+	// Breadth-first search outward from the goal until it reaches the start.
+	dist := map[[2]int]int{{gx, gy}: 0}
+	for queue := [][2]int{{gx, gy}}; len(queue) > 0 && queue[0] != [2]int{x, y}; queue = queue[1:] {
+		c := queue[0]
+		for _, d := range dirs {
+			n := [2]int{c[0] + d[0], c[1] + d[1]}
+			if _, seen := dist[n]; !seen && w.Level[n[1]][n[0]] != '#' {
+				dist[n] = dist[c] + 1
+				queue = append(queue, n)
 			}
 		}
 	}
+	here, reachable := dist[[2]int{x, y}]
+	if !reachable {
+		return 0, 0, false
+	}
+	for _, d := range dirs {
+		if n, ok := dist[[2]int{x + d[0], y + d[1]}]; ok && n == here-1 && w.free(x+d[0], y+d[1]) {
+			return d[0], d[1], true
+		}
+	}
+	return 0, 0, false
 }
 
 // firstInLine returns the first creature within n tiles of from in direction dx, dy, stopping at walls.
