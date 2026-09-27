@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TestBalance plays many seeded runs with two simple bots and logs how they went. It is a tuning
+// TestBalance plays many seeded runs with three bots and logs how they went. It is a tuning
 // aid, not a pass/fail check, so it only runs on request:
 //
 //	NINEDEEP_SIM=1 go test -run Balance -v
@@ -18,7 +18,7 @@ func TestBalance(t *testing.T) {
 	for _, b := range []struct {
 		name string
 		play func(*World) (int, int)
-	}{{"fighter", fighter}, {"diver", diver}} {
+	}{{"fighter", fighter}, {"diver", diver}, {"tactician", tactician}} {
 		var wins, stuck, possessions, turns int
 		deaths := make([]int, floors+1)
 		for seed := range uint64(runs) {
@@ -41,7 +41,7 @@ func TestBalance(t *testing.T) {
 				deaths[w.Depth]++
 			}
 		}
-		t.Logf("%-7s wins %3d%%  stuck %d  possessions/run %.1f  steps/run %d  deaths by floor %v",
+		t.Logf("%-9s wins %3d%%  stuck %d  possessions/run %.1f  steps/run %d  deaths by floor %v",
 			b.name, wins*100/runs, stuck, float64(possessions)/runs, turns/runs, deaths[1:])
 	}
 }
@@ -128,4 +128,68 @@ func (w *World) botToStairs() (int, int) {
 	}
 	dx, dy, _ := w.stepToward(w.Player.X, w.Player.Y, i%mapW, i/mapW)
 	return dx, dy
+}
+
+// tactician plays the way a careful player would: it strikes whatever it can reach, lets melee
+// monsters walk up to it so it hits first, steps out of ranged lines it can't answer, keeps its body
+// fresh by breaking monsters and taking them, and on a boss floor clears the minions before facing
+// the boss.
+func tactician(w *World) (int, int) {
+	p := w.Player
+	hurt := p.HP*2 <= p.MaxHP
+	broken := func(m *Entity) bool { return m.Broken() }
+	unbroken := func(m *Entity) bool { return !m.Broken() && !m.Boss }
+
+	for _, d := range dirs { // take a broken body when bare, hurt, or offered a stronger one
+		if m := w.monsterAt(p.X+d[0], p.Y+d[1]); m != nil && m.Broken() && (w.IsSpark() || hurt || m.MaxHP > p.MaxHP) {
+			return d[0], d[1]
+		}
+	}
+	if w.IsSpark() {
+		return w.botToward(w.nearest(broken))
+	}
+	for _, d := range dirs { // strike
+		if t := w.firstInLine(p, d[0], d[1], p.Range); t != nil && !t.Broken() {
+			return d[0], d[1]
+		}
+	}
+	if s := w.shooterAt(p.X, p.Y); s != nil { // under fire we can't answer: charge the shooter
+		return w.botToward(s)
+	}
+	if m := w.nearest(func(m *Entity) bool { return m.hunting && !m.Broken() && m.Range == 1 }); m != nil &&
+		abs(m.X-p.X)+abs(m.Y-p.Y) <= m.Moves+1 {
+		return 0, 0 // it closes in this turn; waiting gives us the first hit
+	}
+	if hurt { // head for a spare body, or go and make one
+		if b := w.nearest(broken); b != nil {
+			return w.botToward(b)
+		}
+		if m := w.nearest(unbroken); m != nil {
+			return w.botToward(m)
+		}
+	}
+	if strings.IndexByte(strings.Join(w.Level, ""), '>') < 0 { // boss floor: clear the minions first
+		if m := w.nearest(unbroken); m != nil {
+			return w.botToward(m)
+		}
+	}
+	if dx, dy := w.botToStairs(); dx != 0 || dy != 0 {
+		return dx, dy
+	}
+	for _, d := range dirs { // the way is blocked by a broken body: take it rather than wait
+		if m := w.monsterAt(p.X+d[0], p.Y+d[1]); m != nil && m.Broken() {
+			return d[0], d[1]
+		}
+	}
+	return 0, 0
+}
+
+// shooterAt returns a ranged monster that can shoot tile x, y, if any.
+func (w *World) shooterAt(x, y int) *Entity {
+	for _, m := range w.Monsters {
+		if m.Range > 1 && !m.Broken() && (m.X == x || m.Y == y) && abs(m.X-x)+abs(m.Y-y) <= m.Range && w.canSee(m.X, m.Y, x, y) {
+			return m
+		}
+	}
+	return nil
 }

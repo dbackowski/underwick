@@ -31,7 +31,7 @@ Bodies: the goblin archer shoots anything in a straight line up to 5 tiles away,
 
 `go run . -shot frame.png` saves one rendered frame and exits, for checking rendering.
 
-`NINEDEEP_SIM=1 go test -run Balance -v` plays 300 seeded runs with two simple bots and prints win rates, for tuning.
+`NINEDEEP_SIM=1 go test -run Balance -v` plays 300 seeded runs with three bots and prints win rates, for tuning.
 
 ## Credits
 
