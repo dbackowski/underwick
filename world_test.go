@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -22,6 +23,9 @@ func TestPossessionLoop(t *testing.T) {
 	w.Step(1, 0) // bump the broken rat: possess it
 	if w.Player.Name != "rat" || w.Player.HP != 3 || len(w.Monsters) != 0 {
 		t.Fatalf("should possess a healed rat, got %+v, monsters %d", w.Player, len(w.Monsters))
+	}
+	if !slices.Contains(w.Log, "You take the rat.") {
+		t.Fatalf("possessing should be logged, got %q", w.Log)
 	}
 
 	w.Player.HP = 1

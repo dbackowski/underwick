@@ -24,7 +24,8 @@ import (
 const (
 	tile     = 12
 	screenW  = mapW * tile
-	screenH  = (mapH + 1) * tile // one extra row for the HUD
+	screenH  = (mapH+1)*tile + msgH // the map, a HUD row, and the message line
+	msgH     = 16                   // the debug font's line height
 	scale    = 4
 	animTime = 12 // ticks a walk/attack animation plays after a turn
 )
@@ -134,6 +135,22 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// A possessed body gets a spark-blue outline, so it stands out from monsters of the same kind.
 	g.drawEntity(screen, w.Player, 1, !w.IsSpark())
 
+	// Over the sprites: HP bars on hurt monsters, and an alert on those that just spotted the player.
+	for _, m := range w.Monsters {
+		x, y, width := float32(m.X*tile+1), float32(m.Y*tile), float32(tile-2)
+		if m.Boss { // its sprite reaches half a tile beyond its own
+			x, y, width = float32(m.X*tile-tile/2), float32(m.Y*tile-tile/2-2), float32(2*tile)
+		}
+		if m.HP < m.MaxHP {
+			hpBar(screen, x, y, width, 1, m.HP, m.MaxHP)
+		}
+		if m.Spotted {
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Translate(float64(x+width/2-4), float64(y-9)) // FX sprites are 8px
+			screen.DrawImage(g.sprite(fmt.Sprintf("FX/status_alert_%d", g.tick/10%2+1)), op)
+		}
+	}
+
 	// Missiles fly from shooter to target while the turn's animation plays.
 	if since := g.tick - g.turnTick; since < animTime {
 		t := float64(since) / animTime
@@ -159,22 +176,30 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			g.draw(screen, "Character/spark_idle_d_1", i, mapH, 1)
 		}
 	} else {
+		rotsNext := w.decay == w.Player.Decay-1 // the last heart goes at the end of this turn
 		for i := range w.Player.MaxHP {
-			name := "World/ui_heart"
+			name, alpha := "World/ui_heart", float32(1)
 			if i >= w.Player.HP {
 				name = "World/ui_heart_empty"
+			} else if i == w.Player.HP-1 && rotsNext && g.tick/10%2 == 0 {
+				alpha = 0.3
 			}
-			g.draw(screen, name, i, mapH, 1)
+			g.draw(screen, name, i, mapH, alpha)
 		}
 	}
 	for _, m := range w.Monsters {
 		if m.Boss { // health bar between the hearts (up to 10, the orc's) and the depth
-			x, y, width := float32(10*tile+4), float32(mapH*tile+4), float32(52)
-			vector.FillRect(screen, x, y, width, 4, color.RGBA{0x40, 0x10, 0x10, 0xff}, false)
-			vector.FillRect(screen, x, y, width*float32(m.HP)/float32(m.MaxHP), 4, color.RGBA{0xe0, 0x30, 0x30, 0xff}, false)
+			hpBar(screen, float32(10*tile+4), float32(mapH*tile+4), 52, 4, m.HP, m.MaxHP)
 		}
 	}
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Deep %d/%d", w.Depth, floors), screenW-60, mapH*tile-3)
+
+	// Message line: this step's events, dropping the oldest whole messages when they don't fit.
+	log := w.Log
+	for len(log) > 1 && len(strings.Join(log, " ")) > screenW/6 { // the debug font is 6px wide
+		log = log[1:]
+	}
+	ebitenutil.DebugPrintAt(screen, strings.Join(log, " "), 2, (mapH+1)*tile)
 	switch {
 	case w.Won:
 		ebitenutil.DebugPrintAt(screen, "You reached the ninth deep. R to play again.", 0, 80)
@@ -184,6 +209,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	if *shot != "" && g.tick > 30 { // let a few idle frames pass first
 		saveShot(screen, *shot)
 	}
+}
+
+func hpBar(dst *ebiten.Image, x, y, width, height float32, hp, maxHP int) {
+	vector.FillRect(dst, x, y, width, height, color.RGBA{0x40, 0x10, 0x10, 0xff}, false)
+	vector.FillRect(dst, x, y, width*float32(hp)/float32(maxHP), height, color.RGBA{0xe0, 0x30, 0x30, 0xff}, false)
 }
 
 func saveShot(screen *ebiten.Image, path string) {

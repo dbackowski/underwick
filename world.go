@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"slices"
 )
@@ -51,6 +52,8 @@ type Entity struct {
 	Dir  string // l, r, u, d
 	Anim string // what it did this step: idle, walk, atk
 
+	Spotted bool // a monster that noticed the player this step, for the alert icon
+
 	// Monsters only: where the player was last seen, while hunting it, and turns spent broken.
 	hunting      bool
 	goalX, goalY int
@@ -77,8 +80,9 @@ type World struct {
 	Player    *Entity // a spark, or the body it possesses
 	Monsters  []*Entity
 	Shots     []Shot
-	SparkLeft int // turns left to find a body while the player is a bare spark
-	Depth     int // current floor, 1 to floors
+	Log       []string // what happened this step, in order, for the message line
+	SparkLeft int      // turns left to find a body while the player is a bare spark
+	Depth     int      // current floor, 1 to floors
 	Over      bool
 	Won       bool // took the stairs down from the last floor
 	rng       *rand.Rand
@@ -128,13 +132,17 @@ func (w *World) descend() {
 	w.Player.X, w.Player.Y = next.Player.X, next.Player.Y
 	w.Level, w.Monsters = next.Level, next.Monsters
 	w.acted = 0
+	w.say("Deep %d.", w.Depth)
 	for _, m := range w.Monsters {
 		if m.Boss { // 1x on floor 3, 1.5x on floor 6, 2x on floor 9
 			m.MaxHP += m.MaxHP * (w.Depth/3 - 1) / 2
 			m.HP = m.MaxHP
+			w.say("A %s guards the stairs.", m.Name)
 		}
 	}
 }
+
+func (w *World) say(format string, args ...any) { w.Log = append(w.Log, fmt.Sprintf(format, args...)) }
 
 func (w *World) IsSpark() bool { return w.Player.Name == "spark" }
 
@@ -144,10 +152,10 @@ func (w *World) Step(dx, dy int) {
 	if w.Over {
 		return
 	}
-	w.Shots = nil
+	w.Shots, w.Log = nil, nil
 	w.Player.Anim = "idle"
 	for _, m := range w.Monsters {
-		m.Anim = "idle"
+		m.Anim, m.Spotted = "idle", false
 	}
 
 	body := w.Player
@@ -173,6 +181,7 @@ func (w *World) Step(dx, dy int) {
 	} else if w.Player == body { // a body possessed this turn starts decaying next turn
 		if w.decay++; w.decay >= w.Player.Decay {
 			w.decay = 0
+			w.say("Your %s rots.", w.Player.Name)
 			w.damage(w.Player, 1)
 		}
 	}
@@ -181,7 +190,11 @@ func (w *World) Step(dx, dy int) {
 		if m.Broken() {
 			m.brokenFor++
 		}
-		return m.brokenFor > crumble
+		if m.brokenFor > crumble {
+			w.say("The %s crumbles.", m.Name)
+			return true
+		}
+		return false
 	})
 	// A copy, since a monster can die mid-turn (a boss caught in the spark's burst).
 	for _, m := range slices.Clone(w.Monsters) {
@@ -210,6 +223,10 @@ func (w *World) playerAct(dx, dy int) {
 		// touches break anything and the spark can make its own body.
 		m.HP = max(1, m.HP-(m.MaxHP+2)/3)
 		p.Anim = "atk"
+		w.say("You haunt the %s.", m.Name)
+		if m.Broken() {
+			w.say("It breaks.")
+		}
 	case w.free(tx, ty):
 		p.X, p.Y, p.Anim = tx, ty, "walk"
 	}
@@ -228,6 +245,7 @@ func (w *World) act(m *Entity) {
 		return
 	}
 	if dist <= sight && w.canSee(m.X, m.Y, p.X, p.Y) {
+		m.Spotted = m.Spotted || !m.hunting
 		m.hunting, m.goalX, m.goalY = true, p.X, p.Y
 	}
 	if !m.hunting {
@@ -316,8 +334,12 @@ func (w *World) attack(attacker, target *Entity) {
 }
 
 func (w *World) damage(e *Entity, n int) {
+	wasBroken := e.Broken()
 	e.HP -= n
 	if e.HP > 0 {
+		if e != w.Player && e.Broken() && !wasBroken {
+			w.say("The %s breaks.", e.Name)
+		}
 		return
 	}
 	if e == w.Player {
@@ -329,11 +351,13 @@ func (w *World) damage(e *Entity, n int) {
 			switch {
 			case abs(m.X-e.X)+abs(m.Y-e.Y) != 1:
 			case m.Boss:
+				w.say("The burst scorches the %s.", m.Name)
 				w.damage(m, m.MaxHP/4)
 			default:
 				m.HP = min(m.HP, max(1, m.MaxHP/3))
 			}
 		}
+		w.say("Your %s dies. The spark tears free!", e.Name)
 		w.Player = newEntity(spark, e.X, e.Y)
 		w.Player.Dir = e.Dir
 		w.SparkLeft = sparkTurns
@@ -341,6 +365,9 @@ func (w *World) damage(e *Entity, n int) {
 	}
 	if e.Boss { // the sealed stairs open where it fell
 		w.Level[e.Y] = w.Level[e.Y][:e.X] + ">" + w.Level[e.Y][e.X+1:]
+		w.say("The %s falls. The stairs open!", e.Name)
+	} else {
+		w.say("The %s dies.", e.Name)
 	}
 	w.Monsters = slices.DeleteFunc(w.Monsters, func(m *Entity) bool { return m == e })
 }
@@ -351,6 +378,7 @@ func (w *World) possess(m *Entity) {
 	m.HP, m.Dir, m.Anim, m.brokenFor = m.MaxHP, w.Player.Dir, "idle", 0
 	w.Player = m
 	w.decay = 0
+	w.say("You take the %s.", m.Name)
 }
 
 func (w *World) monsterAt(x, y int) *Entity {
