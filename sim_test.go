@@ -123,6 +123,9 @@ func (w *World) botToward(m *Entity) (int, int) {
 
 func (w *World) botToStairs() (int, int) {
 	i := strings.IndexByte(strings.Join(w.Level, ""), '>')
+	if i < 0 { // a boss floor: the stairs open when the boss dies
+		return w.botToward(w.nearest(func(m *Entity) bool { return m.Boss }))
+	}
 	dx, dy, _ := w.stepToward(w.Player.X, w.Player.Y, i%mapW, i/mapW)
 	return dx, dy
 }

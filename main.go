@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"io/fs"
 	"log"
@@ -17,6 +18,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/colorm"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 const (
@@ -132,13 +134,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// A possessed body gets a spark-blue outline, so it stands out from monsters of the same kind.
 	g.drawEntity(screen, w.Player, 1, !w.IsSpark())
 
-	// Arrows fly from shooter to target while the turn's animation plays.
+	// Missiles fly from shooter to target while the turn's animation plays.
 	if since := g.tick - g.turnTick; since < animTime {
 		t := float64(since) / animTime
 		for _, s := range w.Shots {
-			name := "FX/arrow_x"
-			if s.FromX == s.To.X {
-				name = "FX/arrow_y"
+			name := "FX/" + s.Missile
+			if s.Missile == "arrow" {
+				name = "FX/arrow_x"
+				if s.FromX == s.To.X {
+					name = "FX/arrow_y"
+				}
 			}
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Translate( // FX sprites are 8px, centred in the 12px tile
@@ -160,6 +165,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				name = "World/ui_heart_empty"
 			}
 			g.draw(screen, name, i, mapH, 1)
+		}
+	}
+	for _, m := range w.Monsters {
+		if m.Boss { // health bar between the hearts (up to 10, the orc's) and the depth
+			x, y, width := float32(10*tile+4), float32(mapH*tile+4), float32(52)
+			vector.FillRect(screen, x, y, width, 4, color.RGBA{0x40, 0x10, 0x10, 0xff}, false)
+			vector.FillRect(screen, x, y, width*float32(m.HP)/float32(m.MaxHP), 4, color.RGBA{0xe0, 0x30, 0x30, 0xff}, false)
 		}
 	}
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Deep %d/%d", w.Depth, floors), screenW-60, mapH*tile-3)
@@ -193,6 +205,12 @@ func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, alpha float32, outlined 
 	anim, frame := e.Anim, since/(animTime/2)%2+1
 	if since >= animTime {
 		anim, frame = "idle", g.tick/20%2+1
+	}
+	if e.Boss { // 24px sprite centred on its one tile, spilling over the neighbours
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(float64(e.X*tile-tile/2), float64(e.Y*tile-tile/2))
+		dst.DrawImage(g.sprite(fmt.Sprintf("Bosses/%s_%s_%s_%d", e.Name, anim, e.Dir, frame)), op)
+		return
 	}
 	name := fmt.Sprintf("Character/%s_%s_%s_%d", e.Name, anim, e.Dir, frame)
 	if outlined {

@@ -18,16 +18,29 @@ type Kind struct {
 	MaxHP int
 	Dmg   int
 	Moves int // actions per turn
-	Range int // attack reach along a straight line: 1 is melee, more shoots arrows
+	Range int // attack reach along a straight line: 1 is melee, more shoots Missile
 	Decay int // a possessed body loses 1 HP every this many turns
+
+	Missile string // FX sprite of what a ranged attack fires; "arrow" picks arrow_x or arrow_y
+	Boss    bool   // never broken or possessed; killing it opens the stairs
 }
 
 // kinds maps a level character to a body type.
 var kinds = map[byte]Kind{
-	'r': {Name: "rat", MaxHP: 3, Dmg: 1, Moves: 2, Range: 1, Decay: 8},       // fast and fragile
-	'a': {Name: "gobarcher", MaxHP: 5, Dmg: 2, Moves: 1, Range: 5, Decay: 8}, // shoots down a line
-	'o': {Name: "orc", MaxHP: 10, Dmg: 3, Moves: 1, Range: 1, Decay: 4},      // strong, rots twice as fast
+	'r': {Name: "rat", MaxHP: 3, Dmg: 1, Moves: 2, Range: 1, Decay: 8},                         // fast and fragile
+	'a': {Name: "gobarcher", MaxHP: 5, Dmg: 2, Moves: 1, Range: 5, Decay: 8, Missile: "arrow"}, // shoots down a line
+	'o': {Name: "orc", MaxHP: 10, Dmg: 3, Moves: 1, Range: 1, Decay: 4},                        // strong, rots twice as fast
+
+	// Bosses, one per act. Their HP grows on deeper floors, see descend.
+	'D': {Name: "dragon", MaxHP: 16, Dmg: 3, Moves: 1, Range: 4, Missile: "proj_red_ball", Boss: true},    // breathes fire
+	'E': {Name: "beholder", MaxHP: 12, Dmg: 2, Moves: 1, Range: 6, Missile: "proj_blue_ball", Boss: true}, // long-range eye beam
+	'L': {Name: "lord", MaxHP: 14, Dmg: 3, Moves: 1, Range: 5, Missile: "proj_green_ball", Boss: true},    // dark magic
+	'C': {Name: "cyclops", MaxHP: 20, Dmg: 4, Moves: 1, Range: 1, Boss: true},                             // a wall of HP
+	'X': {Name: "demon", MaxHP: 14, Dmg: 2, Moves: 2, Range: 1, Boss: true},                               // fast
+	'R': {Name: "reaper", MaxHP: 10, Dmg: 5, Moves: 1, Range: 1, Boss: true},                              // fragile, hits hardest
 }
+
+const bossKinds = "DELCXR"
 
 var spark = Kind{Name: "spark", MaxHP: 1, Moves: 2} // quick, to reach a body in time
 
@@ -48,14 +61,15 @@ func newEntity(k Kind, x, y int) *Entity {
 	return &Entity{Kind: k, X: x, Y: y, HP: k.MaxHP, Dir: "d", Anim: "idle"}
 }
 
-// Broken bodies can be possessed and are too hurt to act.
-func (e *Entity) Broken() bool { return e.HP > 0 && e.HP*3 <= e.MaxHP }
+// Broken bodies can be possessed and are too hurt to act. Bosses fight to the death instead.
+func (e *Entity) Broken() bool { return !e.Boss && e.HP > 0 && e.HP*3 <= e.MaxHP }
 
-// Shot is an arrow fired this step, kept for the renderer.
-// It points at the target itself, which may have moved or died by the time the arrow is drawn.
+// Shot is a missile fired this step, kept for the renderer.
+// It points at the target itself, which may have moved or died by the time the missile is drawn.
 type Shot struct {
 	FromX, FromY int
 	To           *Entity
+	Missile      string
 }
 
 type World struct {
@@ -68,8 +82,9 @@ type World struct {
 	Over      bool
 	Won       bool // took the stairs down from the last floor
 	rng       *rand.Rand
-	decay     int // turns since the current body last decayed
-	acted     int // player actions taken so far this turn
+	bosses    string // this run's boss for floors 3, 6 and 9, as kind characters
+	decay     int    // turns since the current body last decayed
+	acted     int    // player actions taken so far this turn
 }
 
 // NewWorld parses a level: '#' wall, '@' player (in a goblin archer body), kind letters for monsters.
@@ -90,8 +105,11 @@ func NewWorld(level []string) *World {
 // NewGame starts a run on a generated first floor. The same seed always builds the same floors.
 func NewGame(seed uint64) *World {
 	rng := rand.New(rand.NewPCG(seed, 0))
-	w := NewWorld(generate(rng, 1))
+	w := NewWorld(generate(rng, 1, 0))
 	w.rng, w.Depth = rng, 1
+	for _, i := range rng.Perm(len(bossKinds))[:floors/3] {
+		w.bosses += bossKinds[i : i+1]
+	}
 	return w
 }
 
@@ -101,10 +119,21 @@ func (w *World) descend() {
 		w.Over, w.Won = true, true
 		return
 	}
-	next := NewWorld(generate(w.rng, w.Depth+1))
+	w.Depth++
+	var boss byte
+	if w.Depth%3 == 0 && len(w.bosses) >= w.Depth/3 {
+		boss = w.bosses[w.Depth/3-1]
+	}
+	next := NewWorld(generate(w.rng, w.Depth, boss))
 	w.Player.X, w.Player.Y = next.Player.X, next.Player.Y
-	w.Level, w.Monsters, w.Depth = next.Level, next.Monsters, w.Depth+1
+	w.Level, w.Monsters = next.Level, next.Monsters
 	w.acted = 0
+	for _, m := range w.Monsters {
+		if m.Boss { // 1x on floor 3, 1.5x on floor 6, 2x on floor 9
+			m.MaxHP += m.MaxHP * (w.Depth/3 - 1) / 2
+			m.HP = m.MaxHP
+		}
+	}
 }
 
 func (w *World) IsSpark() bool { return w.Player.Name == "spark" }
@@ -154,9 +183,12 @@ func (w *World) Step(dx, dy int) {
 		}
 		return m.brokenFor > crumble
 	})
-	for _, m := range w.Monsters {
+	// A copy, since a monster can die mid-turn (a boss caught in the spark's burst).
+	for _, m := range slices.Clone(w.Monsters) {
 		for range m.Moves {
-			w.act(m)
+			if m.HP > 0 {
+				w.act(m)
+			}
 		}
 	}
 }
@@ -271,7 +303,7 @@ func (w *World) firstInLine(from *Entity, dx, dy, n int) *Entity {
 func (w *World) attack(attacker, target *Entity) {
 	attacker.Anim = "atk"
 	if abs(target.X-attacker.X)+abs(target.Y-attacker.Y) > 1 {
-		w.Shots = append(w.Shots, Shot{attacker.X, attacker.Y, target})
+		w.Shots = append(w.Shots, Shot{attacker.X, attacker.Y, target, attacker.Missile})
 	}
 	w.damage(target, attacker.Dmg)
 }
@@ -284,8 +316,14 @@ func (w *World) damage(e *Entity, n int) {
 	if e == w.Player {
 		// The body dies and the spark tears free onto the same tile, breaking every monster next to it,
 		// so a spark killed in melee always has a body in reach.
-		for _, m := range w.Monsters {
-			if abs(m.X-e.X)+abs(m.Y-e.Y) == 1 {
+		// A boss can't be broken, so the burst scorches it for a quarter of its HP instead: bodies spent
+		// next to a boss are how the spark wears it down.
+		for _, m := range slices.Clone(w.Monsters) { // a copy, since the burst can kill the boss
+			switch {
+			case abs(m.X-e.X)+abs(m.Y-e.Y) != 1:
+			case m.Boss:
+				w.damage(m, m.MaxHP/4)
+			default:
 				m.HP = min(m.HP, max(1, m.MaxHP/3))
 			}
 		}
@@ -293,6 +331,9 @@ func (w *World) damage(e *Entity, n int) {
 		w.Player.Dir = e.Dir
 		w.SparkLeft = sparkTurns
 		return
+	}
+	if e.Boss { // the sealed stairs open where it fell
+		w.Level[e.Y] = w.Level[e.Y][:e.X] + ">" + w.Level[e.Y][e.X+1:]
 	}
 	w.Monsters = slices.DeleteFunc(w.Monsters, func(m *Entity) bool { return m == e })
 }

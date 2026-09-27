@@ -88,12 +88,28 @@ func TestGenerate(t *testing.T) {
 	for seed := range uint64(200) {
 		rng := rand.New(rand.NewPCG(seed, 0))
 		for depth := 1; depth <= floors; depth++ {
-			level := generate(rng, depth)
+			var boss byte
+			stairs := 1
+			if depth%3 == 0 {
+				boss, stairs = 'D', 0
+			}
+			level := generate(rng, depth, boss)
 			all := strings.Join(level, "")
 			if len(level) != mapH || len(all) != mapW*mapH ||
-				strings.Count(all, "@") != 1 || strings.Count(all, ">") != 1 ||
+				strings.Count(all, "@") != 1 || strings.Count(all, ">") != stairs || strings.Count(all, "D") != 1-stairs ||
 				level[0] != strings.Repeat("#", mapW) || level[mapH-1] != level[0] {
 				t.Fatalf("seed %d depth %d: malformed floor\n%s", seed, depth, strings.Join(level, "\n"))
+			}
+			if boss != 0 { // minions stand within 2 steps of the boss
+				b, near := strings.IndexByte(all, boss), 0
+				for i, c := range all {
+					if _, ok := kinds[byte(c)]; ok && i != b && abs(i%mapW-b%mapW)+abs(i/mapW-b/mapW) <= 2 {
+						near++
+					}
+				}
+				if near < minions {
+					t.Fatalf("seed %d depth %d: %d monsters near the boss\n%s", seed, depth, near, strings.Join(level, "\n"))
+				}
 			}
 			for _, row := range level {
 				if row[0] != '#' || row[mapW-1] != '#' {
@@ -202,5 +218,40 @@ func TestBurstAndCrumble(t *testing.T) {
 	}
 	if len(w.Monsters) != 0 {
 		t.Fatalf("broken rat should crumble after %d turns", crumble)
+	}
+}
+
+func TestBosses(t *testing.T) {
+	w := NewGame(7)
+	if len(w.bosses) != 3 || w.bosses[0] == w.bosses[1] || w.bosses[1] == w.bosses[2] || w.bosses[0] == w.bosses[2] {
+		t.Fatalf("a run should face 3 different bosses, got %q", w.bosses)
+	}
+
+	// A boss is never broken, even at 1 HP, and killing it opens the stairs where it stood.
+	w = NewWorld([]string{
+		"#####",
+		"#@D.#",
+		"#####",
+	})
+	dragon := w.Monsters[0]
+	dragon.HP = 1
+	if dragon.Broken() {
+		t.Fatal("a boss should never be broken")
+	}
+	w.Step(1, 0)
+	if len(w.Monsters) != 0 || w.Level[1][2] != '>' {
+		t.Fatalf("killing the boss should open the stairs, got %q", w.Level[1])
+	}
+
+	// The spark's burst can't break a boss, so it scorches it for a quarter of its HP.
+	w = NewWorld([]string{
+		"#####",
+		"#@C.#",
+		"#####",
+	})
+	w.Player.HP = 1
+	w.Step(0, 0) // the cyclops kills the archer
+	if cyclops := w.Monsters[0]; !w.IsSpark() || cyclops.Broken() || cyclops.HP != cyclops.MaxHP-cyclops.MaxHP/4 {
+		t.Fatalf("burst should scorch the boss for a quarter of its HP, got %+v", cyclops)
 	}
 }

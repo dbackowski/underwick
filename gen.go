@@ -11,6 +11,8 @@ const (
 	floors     = 9
 )
 
+const minions = 3 // monsters placed next to a boss
+
 type room struct{ x, y, w, h int }
 
 func (r room) center() (int, int) { return r.x + r.w/2, r.y + r.h/2 }
@@ -22,7 +24,8 @@ func (r room) overlaps(o room) bool {
 
 // generate builds a floor in the format NewWorld parses: rooms joined by corridors, the player in
 // the first room, stairs down ('>') in the room farthest from it, and monsters in the other rooms.
-func generate(rng *rand.Rand, depth int) []string {
+// With a boss (its kind character, or 0 for none), the boss takes the stairs' place; they open when it dies.
+func generate(rng *rand.Rand, depth int, boss byte) []string {
 	for {
 		g := make([][]byte, mapH)
 		for y := range g {
@@ -70,6 +73,9 @@ func generate(rng *rand.Rand, depth int) []string {
 		})
 		fx, fy := far.center()
 		g[fy][fx] = '>'
+		if boss != 0 {
+			g[fy][fx] = boss
+		}
 
 		var spots [][2]int
 		for _, r := range rooms[1:] {
@@ -84,7 +90,20 @@ func generate(rng *rand.Rand, depth int) []string {
 		rng.Shuffle(len(spots), func(i, j int) { spots[i], spots[j] = spots[j], spots[i] })
 		// ponytail: flat difficulty curve, more monsters and more orcs per floor; tune once the game is played
 		pool := "rrraa" + strings.Repeat("o", depth/2)
-		for _, s := range spots[:min(2+depth, len(spots))] {
+		n := min(2+depth, len(spots))
+		if boss != 0 {
+			// Minions stand closest to the boss, so a body dying in the fight has others in reach.
+			slices.SortStableFunc(spots, func(a, b [2]int) int {
+				return abs(a[0]-fx) + abs(a[1]-fy) - abs(b[0]-fx) - abs(b[1]-fy)
+			})
+			for _, s := range spots[:min(minions, len(spots))] {
+				g[s[1]][s[0]] = pool[rng.IntN(len(pool))]
+			}
+			spots = spots[min(minions, len(spots)):]
+			rng.Shuffle(len(spots), func(i, j int) { spots[i], spots[j] = spots[j], spots[i] })
+			n = min(max(0, 2+depth-minions), len(spots))
+		}
+		for _, s := range spots[:n] {
 			g[s[1]][s[0]] = pool[rng.IntN(len(pool))]
 		}
 

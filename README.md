@@ -23,6 +23,10 @@ Monsters within 6 tiles notice you only if they can see you, then hunt you down 
 
 Each floor is generated. Take the stairs down to reach the next one; the ninth is the bottom.
 
+Floors 3, 6 and 9 each hold a boss, three of six per run: dragon, beholder, lord, cyclops, demon or reaper.
+Its stairs stay sealed until it dies. A boss can't be broken or possessed, but every body that dies next
+to it scorches it for a quarter of its HP, and it keeps three minions close to take over mid-fight.
+
 Bodies: the goblin archer shoots anything in a straight line up to 5 tiles away, the rat moves twice per turn, and the orc hits hard but rots twice as fast.
 
 `go run . -shot frame.png` saves one rendered frame and exits, for checking rendering.
