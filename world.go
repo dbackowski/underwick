@@ -32,12 +32,12 @@ var kinds = map[byte]Kind{
 	'o': {Name: "orc", MaxHP: 10, Dmg: 3, Moves: 1, Range: 1, Decay: 4},                        // strong, rots twice as fast
 
 	// Bosses, one per act. Their HP grows on deeper floors, see descend.
-	'D': {Name: "dragon", MaxHP: 16, Dmg: 3, Moves: 1, Range: 4, Missile: "proj_red_ball", Boss: true},    // breathes fire
-	'E': {Name: "beholder", MaxHP: 12, Dmg: 2, Moves: 1, Range: 6, Missile: "proj_blue_ball", Boss: true}, // long-range eye beam
-	'L': {Name: "lord", MaxHP: 14, Dmg: 3, Moves: 1, Range: 5, Missile: "proj_green_ball", Boss: true},    // dark magic
-	'C': {Name: "cyclops", MaxHP: 20, Dmg: 4, Moves: 1, Range: 1, Boss: true},                             // a wall of HP
-	'X': {Name: "demon", MaxHP: 14, Dmg: 2, Moves: 2, Range: 1, Boss: true},                               // fast
-	'R': {Name: "reaper", MaxHP: 10, Dmg: 5, Moves: 1, Range: 1, Boss: true},                              // fragile, hits hardest
+	'D': {Name: "dragon", MaxHP: 8, Dmg: 3, Moves: 1, Range: 4, Missile: "proj_red_ball", Boss: true},    // breathes fire
+	'E': {Name: "beholder", MaxHP: 6, Dmg: 2, Moves: 1, Range: 6, Missile: "proj_blue_ball", Boss: true}, // long-range eye beam
+	'L': {Name: "lord", MaxHP: 7, Dmg: 3, Moves: 1, Range: 5, Missile: "proj_green_ball", Boss: true},    // dark magic
+	'C': {Name: "cyclops", MaxHP: 10, Dmg: 4, Moves: 1, Range: 1, Boss: true},                            // a wall of HP
+	'X': {Name: "demon", MaxHP: 7, Dmg: 2, Moves: 2, Range: 1, Boss: true},                               // fast
+	'R': {Name: "reaper", MaxHP: 5, Dmg: 5, Moves: 1, Range: 1, Boss: true},                              // fragile, hits hardest
 }
 
 const bossKinds = "DELCXR"
