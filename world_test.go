@@ -255,3 +255,25 @@ func TestBosses(t *testing.T) {
 		t.Fatalf("burst should scorch the boss for a quarter of its HP, got %+v", cyclops)
 	}
 }
+
+func TestSparkHaunts(t *testing.T) {
+	for _, c := range "rao" {
+		w := NewWorld([]string{
+			"#####",
+			"#@" + string(c) + ".#",
+			"#####",
+		})
+		w.Player = newEntity(spark, 1, 1)
+		w.SparkLeft = sparkTurns
+		body := w.Monsters[0]
+		w.Step(1, 0)
+		w.Step(1, 0) // two touches: one full turn, as the spark moves twice
+		if !body.Broken() {
+			t.Fatalf("%s should be broken after two touches, got %d/%d HP", body.Name, body.HP, body.MaxHP)
+		}
+		w.Step(1, 0)
+		if w.Player != body {
+			t.Fatalf("spark should take the %s it broke", body.Name)
+		}
+	}
+}

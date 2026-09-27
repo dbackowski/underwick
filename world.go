@@ -201,9 +201,16 @@ func (w *World) playerAct(dx, dy int) {
 		return
 	}
 	tx, ty := p.X+dx, p.Y+dy
-	if m := w.monsterAt(tx, ty); m != nil && m.Broken() {
+	m := w.monsterAt(tx, ty)
+	switch {
+	case m != nil && m.Broken():
 		w.possess(m)
-	} else if w.free(tx, ty) {
+	case m != nil && w.IsSpark() && !m.Boss:
+		// A bare spark haunts: each touch drains a third of the body's HP (never killing it), so two
+		// touches break anything and the spark can make its own body.
+		m.HP = max(1, m.HP-(m.MaxHP+2)/3)
+		p.Anim = "atk"
+	case w.free(tx, ty):
 		p.X, p.Y, p.Anim = tx, ty, "walk"
 	}
 }

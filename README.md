@@ -17,7 +17,7 @@ Arrow keys or WASD move and attack, space waits a turn, R restarts after death.
 You are a spark in a borrowed body (outlined in blue). The body rots 1 HP every few turns.
 Beat a monster down to a third of its HP (it blinks) and walk into it to take it over.
 If your body dies the spark tears free, breaking every monster next to it, and moves twice per turn.
-You have 3 turns to take a new body. A broken monster that nobody takes falls apart after 6 turns.
+You have 3 turns to take a new body. A bare spark haunts: touching a monster drains a third of its HP, so two touches break it. A broken monster that nobody takes falls apart after 6 turns.
 
 Monsters within 6 tiles notice you only if they can see you, then hunt you down to where they last saw you.
 

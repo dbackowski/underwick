@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -57,7 +58,7 @@ func fighter(w *World) (int, int) {
 		}
 	}
 	if w.IsSpark() {
-		return w.botToward(w.nearest(func(m *Entity) bool { return m.Broken() }))
+		return w.sparkMove()
 	}
 	for _, d := range dirs {
 		if t := w.firstInLine(p, d[0], d[1], p.Range); t != nil && !t.Broken() {
@@ -90,7 +91,7 @@ func diver(w *World) (int, int) {
 		}
 	}
 	if w.IsSpark() {
-		return w.botToward(w.nearest(func(m *Entity) bool { return m.Broken() }))
+		return w.sparkMove()
 	}
 	if dx, dy := w.botToStairs(); dx != 0 || dy != 0 {
 		return dx, dy
@@ -98,6 +99,31 @@ func diver(w *World) (int, int) {
 	for _, d := range dirs {
 		if t := w.firstInLine(p, d[0], d[1], p.Range); t != nil && !t.Broken() {
 			return d[0], d[1]
+		}
+	}
+	return 0, 0
+}
+
+// sparkMove heads for the nearest broken body it can reach, or else the nearest monster to haunt.
+func (w *World) sparkMove() (int, int) {
+	p := w.Player
+	targets := slices.DeleteFunc(slices.Clone(w.Monsters), func(m *Entity) bool { return m.Boss })
+	slices.SortStableFunc(targets, func(a, b *Entity) int {
+		ra, rb := abs(a.X-p.X)+abs(a.Y-p.Y), abs(b.X-p.X)+abs(b.Y-p.Y)
+		if a.Broken() { // broken bodies first: taking one is a single move
+			ra -= 100
+		}
+		if b.Broken() {
+			rb -= 100
+		}
+		return ra - rb
+	})
+	for _, m := range targets {
+		if abs(m.X-p.X)+abs(m.Y-p.Y) == 1 {
+			return m.X - p.X, m.Y - p.Y
+		}
+		if dx, dy, ok := w.stepToward(p.X, p.Y, m.X, m.Y); ok {
+			return dx, dy
 		}
 	}
 	return 0, 0
@@ -146,7 +172,7 @@ func tactician(w *World) (int, int) {
 		}
 	}
 	if w.IsSpark() {
-		return w.botToward(w.nearest(broken))
+		return w.sparkMove()
 	}
 	for _, d := range dirs { // strike
 		if t := w.firstInLine(p, d[0], d[1], p.Range); t != nil && !t.Broken() {
