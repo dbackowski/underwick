@@ -151,7 +151,9 @@ type World struct {
 	ExpLevel int // the hero's experience level, from 1
 	XP       int // experience toward the next level
 	Gold     int
-	Over     bool // the hero is dead
+	Over     bool     // the hero is dead
+	Cause    string   // what killed it, e.g. "an orc" or "lava"
+	Actions  []Action // everything the hero did this run, for saving
 
 	Inventory []*Item
 	Floor     []*Item // items lying on this floor
@@ -168,6 +170,8 @@ type World struct {
 	regen  int                  // turns since the hero last regained HP
 	warned [2]int               // the lava tile the hero was last warned about
 	manaIn int                  // turns since the hero last regained mana
+	seed   uint64               // the run's seed, for saving
+	hurtBy string               // what is hurting the hero this turn, for the cause of death
 }
 
 // NewWorld starts a warrior's run on a given level, in the format generate makes. Tests use it with
@@ -288,6 +292,7 @@ func (w *World) updateFOV() {
 func NewGame(seed uint64, c *Class) *World {
 	rng := rand.New(rand.NewPCG(seed, 0))
 	w := newRun(rng, c)
+	w.seed = seed
 	w.load(generate(rng, 1, 0))
 	w.settle()
 	for _, i := range rng.Perm(len(bossKinds)) {
@@ -353,9 +358,25 @@ func (w *World) descend() {
 
 func (w *World) say(format string, args ...any) { w.Log = append(w.Log, fmt.Sprintf(format, args...)) }
 
+// record notes an action for the save, while the hero lives.
+func (w *World) record(a Action) {
+	if !w.Over {
+		w.Actions = append(w.Actions, a)
+	}
+}
+
+// article puts "a" or "an" before a name.
+func article(name string) string {
+	if strings.ContainsRune("aeiou", rune(name[0])) {
+		return "an " + name
+	}
+	return "a " + name
+}
+
 // Step is one turn of moving or attacking in a direction, or waiting for 0, 0. Walking into lava
 // asks first: the first try only warns.
 func (w *World) Step(dx, dy int) {
+	w.record(Action{Do: 'm', X: dx, Y: dy})
 	tx, ty := w.Player.X+dx, w.Player.Y+dy
 	if (dx != 0 || dy != 0) && w.Level[ty][tx] == '=' && w.Level[w.Player.Y][w.Player.X] != '=' &&
 		w.warned != [2]int{tx, ty} && !w.Over {
@@ -391,15 +412,18 @@ func (w *World) turn(act func()) {
 		return
 	case '^':
 		w.say("You fall through a pit!")
+		w.hurtBy = "a fall"
 		if w.damage(p, 1+w.rng.IntN(6)); !w.Over {
 			w.descend()
 		}
 		return
 	case '=':
 		w.say("The lava burns you!")
+		w.hurtBy = "lava"
 		w.damage(p, 10+w.Depth)
 	case '%':
 		w.say("The acid burns!")
+		w.hurtBy = "acid"
 		w.damage(p, 3)
 	}
 	if w.Over {
@@ -429,6 +453,7 @@ func (w *World) turn(act func()) {
 	}
 	if p.Poison > 0 && !w.Over {
 		p.Poison--
+		w.hurtBy = "poison"
 		w.damage(p, 1)
 	}
 }
@@ -653,6 +678,7 @@ func (w *World) attack(a, t *Entity) {
 		w.say("You hit the %s.", t.Name)
 	} else {
 		w.say("The %s hits.", a.Name)
+		w.hurtBy = article(a.Name)
 	}
 	w.damage(t, 1+w.rng.IntN(a.Dmg))
 	if t.HP <= 0 || t != w.Player {
@@ -675,15 +701,23 @@ func (w *World) damage(e *Entity, n int) {
 		return
 	}
 	if e == w.Player {
-		w.Over = true
+		w.Over, w.Cause = true, w.hurtBy
 		w.say("You die.")
 		return
 	}
 	w.Kills++
 	w.gainXP(e.XP)
-	if e.Boss { // the sealed stairs open where it fell
+	if e.Boss { // the sealed stairs open where it fell, and its hoard spills around them
 		w.setTile(e.X, e.Y, '>')
 		w.say("The %s falls. The stairs open!", e.Name)
+		loot := []*Item{rollItem(w.rng, w.Depth+3), rollItem(w.rng, w.Depth+3), {ItemKind: gold, Amount: 50 * w.Depth}}
+		for _, d := range dirs {
+			if x, y := e.X+d[0], e.Y+d[1]; len(loot) > 0 && !solid(w.Level[y][x]) && !hazard(w.Level[y][x]) {
+				loot[0].X, loot[0].Y = x, y
+				w.Floor = append(w.Floor, loot[0])
+				loot = loot[1:]
+			}
+		}
 	} else {
 		w.say("The %s dies.", e.Name)
 	}

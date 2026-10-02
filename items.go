@@ -94,15 +94,22 @@ var itemKinds = []*ItemKind{
 	{Name: "scroll of enchant weapon", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) {
 		w.enchant(func(it *Item) bool { return it.Slot == "weapon" }, "weapon")
 	}},
-	// Tomes teach spells; they are never disguised.
-	{Name: "tome of fire bolt", Sprite: "object_tome_brown", Class: 't', Depth: 2, Weight: 1, use: learn("fire bolt")},
-	{Name: "tome of heal", Sprite: "object_tome_blue", Class: 't', Depth: 2, Weight: 1, use: learn("heal")},
-	{Name: "tome of sleep", Sprite: "object_tome_green", Class: 't', Depth: 2, Weight: 1, use: learn("sleep")},
 
 	{Name: "scroll of sleep", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) { w.lull(8) }},
 	{Name: "scroll of enchant armour", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) {
 		w.enchant(func(it *Item) bool { return it.Def > 0 && it.Slot != "ring" }, "armour")
 	}},
+}
+
+// Tomes teach spells, and are never disguised. They join itemKinds here rather than in its literal:
+// learning reaches the spells, a spell can kill a boss, and a boss's loot is rolled from itemKinds,
+// which Go would refuse as an initialization cycle.
+func init() {
+	itemKinds = append(itemKinds,
+		&ItemKind{Name: "tome of fire bolt", Sprite: "object_tome_brown", Class: 't', Depth: 2, Weight: 1, use: learn("fire bolt")},
+		&ItemKind{Name: "tome of heal", Sprite: "object_tome_blue", Class: 't', Depth: 2, Weight: 1, use: learn("heal")},
+		&ItemKind{Name: "tome of sleep", Sprite: "object_tome_green", Class: 't', Depth: 2, Weight: 1, use: learn("sleep")},
+	)
 }
 
 // The faces unidentified potions and scrolls wear; each run shuffles which kind gets which.
@@ -226,6 +233,7 @@ func (w *World) pickUpGold() {
 
 // PickUp takes the top item from the hero's tile. It takes a turn if there was anything to take.
 func (w *World) PickUp() {
+	w.record(Action{Do: 'g'})
 	its := w.ItemsAt(w.Player.X, w.Player.Y)
 	switch {
 	case len(its) == 0:
@@ -244,6 +252,7 @@ func (w *World) PickUp() {
 
 // Drop puts an inventory item on the hero's tile, taking it off first if worn. It takes a turn.
 func (w *World) Drop(i int) {
+	w.record(Action{Do: 'd', I: i})
 	if i < 0 || i >= len(w.Inventory) {
 		return
 	}
@@ -260,6 +269,7 @@ func (w *World) Drop(i int) {
 
 // Use applies an inventory item: wears or takes off gear, drinks a potion, reads a scroll. It takes a turn.
 func (w *World) Use(i int) {
+	w.record(Action{Do: 'u', I: i})
 	if i < 0 || i >= len(w.Inventory) {
 		return
 	}

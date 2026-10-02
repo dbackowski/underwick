@@ -14,14 +14,20 @@ The sprites and font are from Oryx Design Lab's [8-Bit Remaster](https://www.ory
 
     go run .
 
-Pick a hero to start: the warrior (tough, with a sword), the archer (shoots with a bow), the mage (frail,
+The title screen starts a new game, continues a saved one, or shows the high scores and the keys. Pick a
+hero to start: the warrior (tough, with a sword), the archer (shoots with a bow), the mage (frail,
 casts Fire Bolt), the thief (quiet, so sleeping monsters wake half as often) or the cleric (armoured,
 casts Heal).
 
 Arrow keys or WASD move and attack, space waits a turn, R chooses a new hero after death. G picks up
 what you stand on, I opens your pack (a letter uses, wears or takes off an item), X drops an item, C
 casts a spell (a letter picks it, then a direction aims it if it needs aiming), and Escape closes a
-panel.
+panel or opens the menu, where you can see the keys and high scores or save and quit.
+
+Quitting, or closing the window, saves the run; continuing it deletes the save, and dying ends it for good.
+The top 10 runs are kept with their class, depth and cause of death. Both live in your user config folder
+(`~/Library/Application Support/underwick` on macOS). A save is replayed from your moves, so one made
+before an update that changes the rules is refused.
 
 Walk into a monster to attack it. A hit lands 70% of the time, plus 5% for each point of your accuracy over
 its armour, and deals 1 up to your weapon's damage. You regain 1 HP every 8 turns.
@@ -56,7 +62,8 @@ key lying elsewhere on the floor and a chest of better loot inside.
 Some rooms hold pools that monsters never enter: deep water slows you, giving monsters an extra turn;
 acid burns each turn you stand in it; lava burns badly, so you are warned and must move again to step
 in; and a pit drops you to the next floor, with a fall. Take the stairs down to reach the next floor. Every 5th floor a boss guards the stairs, which open
-when it dies: dragon, beholder, lord, cyclops, demon or reaper, stronger each time round.
+when it dies: dragon, beholder, lord, cyclops, demon or reaper, stronger each time round. Its hoard, two
+fine items and gold, spills around the stairs.
 
 Your score is 100 per floor reached, 10 per kill, 50 per level gained, and your gold.
 

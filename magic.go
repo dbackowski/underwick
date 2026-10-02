@@ -64,6 +64,7 @@ const manaEvery = 5
 
 // Cast casts a known spell, in direction dx, dy if it is aimed. It takes a turn if there was the mana.
 func (w *World) Cast(i, dx, dy int) {
+	w.record(Action{Do: 'c', I: i, X: dx, Y: dy})
 	if i < 0 || i >= len(w.Spells) {
 		return
 	}

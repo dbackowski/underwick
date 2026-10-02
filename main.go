@@ -63,8 +63,12 @@ type Game struct {
 	floor    *ebiten.Image // the whole floor, drawn before the camera picks the part on screen
 	low      *ebiten.Image // the screen at the art's own size, enlarged by scale with hard pixel edges
 	labels   []label       // text for this frame, drawn after the enlargement at full resolution
-	mode     string        // "" while playing; "class", "use", "drop", "cast" or "aim" while choosing
+	mode     string        // "" while playing; otherwise the screen or panel showing, e.g. "title", "use"
+	back     string        // the mode to return to from the keys or scores panel
 	spell    int           // the spell being aimed
+	recorded bool          // the dead hero's score is on the list
+	place    int           // its place there, from 0, or -1
+	notice   string        // a problem to show on the title screen
 	tick     int
 	turnTick int // tick of the last turn, to time its animations
 }
@@ -137,19 +141,79 @@ func letter(n int) (int, bool) {
 	return 0, false
 }
 
+// saveRun saves the run in progress, if there is one.
+func (g *Game) saveRun() {
+	if g.world != nil {
+		if err := g.world.Save(); err != nil {
+			log.Println("saving:", err)
+		}
+	}
+}
+
 func (g *Game) Update() error {
 	g.tick++
-	if g.world == nil || g.mode == "class" {
-		g.mode = "class"
-		if i, ok := letter(len(classes)); ok {
-			g.world, g.mode = NewGame(rand.Uint64(), classes[i]), ""
+	if ebiten.IsWindowBeingClosed() { // closing the window saves, like quitting from the menu
+		g.saveRun()
+		return ebiten.Termination
+	}
+	switch g.mode {
+	case "title":
+		switch {
+		case justPressed(ebiten.KeyN):
+			g.mode = "class"
+		case justPressed(ebiten.KeyC) && HasSave():
+			w, err := Continue()
+			if err != nil {
+				g.notice = "Couldn't continue: " + err.Error()
+				return nil
+			}
+			g.world, g.mode, g.recorded = w, "", false
+		case justPressed(ebiten.KeyH):
+			g.back, g.mode = "title", "scores"
+		case justPressed(ebiten.KeyK):
+			g.back, g.mode = "title", "keys"
+		case justPressed(ebiten.KeyQ, ebiten.KeyEscape):
+			return ebiten.Termination
+		}
+		return nil
+	case "keys", "scores":
+		if justPressed(ebiten.KeyEscape, ebiten.KeySpace, ebiten.KeyEnter) {
+			g.mode = g.back
+		}
+		return nil
+	case "menu":
+		switch {
+		case justPressed(ebiten.KeyEscape):
+			g.mode = ""
+		case justPressed(ebiten.KeyK):
+			g.back, g.mode = "menu", "keys"
+		case justPressed(ebiten.KeyH):
+			g.back, g.mode = "menu", "scores"
+		case justPressed(ebiten.KeyQ):
+			g.saveRun()
+			return ebiten.Termination
+		}
+		return nil
+	case "class":
+		if justPressed(ebiten.KeyEscape) {
+			g.mode = "title"
+		} else if i, ok := letter(len(classes)); ok {
+			DeleteSave() // a new run gives up the saved one
+			g.world, g.mode, g.recorded = NewGame(rand.Uint64(), classes[i]), "", false
 		}
 		return nil
 	}
 	w := g.world
 	if w.Over {
-		if justPressed(ebiten.KeyR) {
+		if !g.recorded {
+			g.place, g.recorded = w.RecordScore(), true
+			DeleteSave()
+		}
+		switch {
+		case justPressed(ebiten.KeyR):
 			g.mode = "class"
+		case justPressed(ebiten.KeyEscape):
+			g.mode = "title"
 		}
 		return nil
 	}
@@ -202,6 +266,9 @@ func (g *Game) Update() error {
 		g.mode = "use"
 	case justPressed(ebiten.KeyX):
 		g.mode = "drop"
+	case justPressed(ebiten.KeyEscape):
+		g.mode = "menu"
+		return nil
 	case justPressed(ebiten.KeyC):
 		if len(w.Spells) == 0 {
 			w.Log = []string{"You know no spells."}
@@ -222,12 +289,14 @@ func (g *Game) Draw(out *ebiten.Image) {
 	screen := g.low
 	screen.Fill(color.Black)
 	g.labels = g.labels[:0]
-	if g.world != nil {
+	if g.world != nil && g.mode != "title" {
 		g.drawWorld(screen)
 	}
-	if g.mode == "class" {
+	if full := map[string]func(*ebiten.Image){
+		"title": g.drawTitle, "class": g.drawClasses, "menu": g.drawMenu, "keys": g.drawKeys, "scores": g.drawScores,
+	}[g.mode]; full != nil {
 		g.labels = g.labels[:0] // the panel covers everything
-		g.drawClasses(screen)
+		full(screen)
 	}
 
 	// The art, enlarged with hard pixel edges, then the text over it at full resolution.
@@ -369,11 +438,91 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 	case g.mode == "cast":
 		g.labels = g.labels[:0]
 		g.drawSpells(screen)
-	case w.Over && g.mode != "class":
-		panel(screen, 30, 66, screenW-60, 32)
-		g.label(fmt.Sprintf("You died on depth %d. Score %d.", w.Depth, w.Score()), 38, 72, white)
-		g.label("Press R to choose a new hero.", 38, 72+lineH+2, grey)
+	case w.Over && g.mode == "":
+		panel(screen, 8, 56, screenW-16, 4*lineH+8)
+		g.label(fmt.Sprintf("Killed by %s on depth %d.", w.Cause, w.Depth), 14, 60, white)
+		place := ""
+		if g.recorded && g.place >= 0 {
+			place = fmt.Sprintf(", number %d!", g.place+1)
+		}
+		g.label(fmt.Sprintf("Score %d%s", w.Score(), place), 14, 60+lineH, yellow)
+		g.label("R: a new hero.  Esc: title screen.", 14, 60+2*lineH+4, grey)
 	}
+}
+
+// drawTitle is the first screen: the name, and where to go from here.
+func (g *Game) drawTitle(screen *ebiten.Image) {
+	panel(screen, 2, 2, screenW-4, screenH-4)
+	g.label("UNDERWICK", 92, 16, yellow)
+	g.label("The dark below the village never ends.", 14, 16+lineH+2, grey)
+	for i, c := range classes { // the heroes, waiting
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(float64(78+i*18), 44)
+		screen.DrawImage(g.sprite(fmt.Sprintf("Character/%s_idle_d_%d", c.Name, (g.tick/20+i)%2+1)), op)
+	}
+	options := [][2]string{{"N", "New game"}, {"H", "High scores"}, {"K", "Keys"}, {"Q", "Quit"}}
+	if HasSave() {
+		options = append([][2]string{{"C", "Continue"}, {"N", "New game (ends the saved run)"}}, options[1:]...)
+	}
+	for i, o := range options {
+		y := 70 + float64(i)*(lineH+3)
+		g.label(o[0], 40, y, yellow)
+		g.label(o[1], 56, y, white)
+	}
+	if g.notice != "" {
+		g.label(g.notice, 8, 136, yellow)
+	}
+	g.label("Art by Oryx Design Lab, oryxdesignlab.com", 6, screenH-4-lineH-2, grey)
+}
+
+// drawMenu is the pause menu during a run.
+func (g *Game) drawMenu(screen *ebiten.Image) {
+	panel(screen, 50, 50, screenW-100, 6*lineH+10)
+	g.label("Paused", 58, 54, yellow)
+	for i, o := range [][2]string{{"Esc", "Resume"}, {"K", "Keys"}, {"H", "High scores"}, {"Q", "Save and quit"}} {
+		y := 54 + float64(i+1)*lineH + 4
+		g.label(o[0], 58, y, yellow)
+		g.label(o[1], 84, y, white)
+	}
+}
+
+// drawKeys explains the controls.
+func (g *Game) drawKeys(screen *ebiten.Image) {
+	panel(screen, 2, 2, screenW-4, screenH-4)
+	g.label("Keys", 6, 5, yellow)
+	for i, l := range [][2]string{
+		{"Arrows, WASD", "move, attack, open doors"},
+		{"Space, .", "wait a turn"},
+		{"G", "pick up"},
+		{"I", "pack: a letter uses an item,"},
+		{"", "or puts it on or off"},
+		{"X", "drop an item"},
+		{"C", "cast a spell, then aim it"},
+		{"Esc", "menu, or close a panel"},
+	} {
+		y := 5 + float64(i+1)*lineH + 4
+		g.label(l[0], 6, y, yellow)
+		g.label(l[1], 84, y, white)
+	}
+	g.label("Locked doors open with their key.", 6, 5+10*lineH+4, grey)
+	g.label("With a bow, moving at a monster shoots.", 6, 5+11*lineH+4, grey)
+	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
+}
+
+// drawScores lists the best runs.
+func (g *Game) drawScores(screen *ebiten.Image) {
+	panel(screen, 2, 2, screenW-4, screenH-4)
+	g.label("High scores", 6, 5, yellow)
+	ss := LoadScores()
+	if len(ss) == 0 {
+		g.label("No runs yet.", 6, 5+lineH+4, grey)
+	}
+	for i, s := range ss {
+		y := 5 + float64(i+1)*(lineH+5)
+		g.label(fmt.Sprintf("%2d. %5d  %s, depth %d", i+1, s.Points, s.Class, s.Depth), 6, y, white)
+		g.label(fmt.Sprintf("killed by %s, %s", s.Cause, s.Date), 34, y+lineH-2, grey)
+	}
+	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
 }
 
 // drawClasses lets the player pick a hero for a new run.
@@ -389,7 +538,7 @@ func (g *Game) drawClasses(screen *ebiten.Image) {
 		g.label(fmt.Sprintf("%c) %s", 'a'+i, strings.ToUpper(c.Name[:1])+c.Name[1:]), 24, y, white)
 		g.label(c.About, 24, y+lineH, grey)
 	}
-	g.label("Art by Oryx Design Lab, oryxdesignlab.com", 6, screenH-4-lineH-2, grey)
+	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
 }
 
 // drawSpells lists the spells the hero knows, lettered, for casting.
@@ -585,7 +734,8 @@ func main() {
 	font = loadFont()
 	ebiten.SetWindowSize(screenW*scale, screenH*scale)
 	ebiten.SetWindowTitle("Underwick")
-	if err := ebiten.RunGame(&Game{sprites: loadSprites()}); err != nil {
+	ebiten.SetWindowClosingHandled(true)
+	if err := ebiten.RunGame(&Game{sprites: loadSprites(), mode: "title"}); err != nil {
 		log.Fatal(err)
 	}
 }
