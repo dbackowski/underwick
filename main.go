@@ -309,7 +309,7 @@ func (g *Game) Layout(int, int) (int, int) { return screenW, screenH }
 func main() {
 	flag.Parse()
 	ebiten.SetWindowSize(screenW*scale, screenH*scale)
-	ebiten.SetWindowTitle("Ninedeep")
+	ebiten.SetWindowTitle("Underwick")
 	if err := ebiten.RunGame(&Game{sprites: loadSprites(), world: NewGame(rand.Uint64())}); err != nil {
 		log.Fatal(err)
 	}

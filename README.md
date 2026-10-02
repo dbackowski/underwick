@@ -1,4 +1,4 @@
-# Ninedeep
+# Underwick
 
 Turn-based roguelike built with Go and [Ebitengine](https://ebitengine.org).
 
@@ -32,7 +32,7 @@ Bodies: the goblin archer shoots anything in a straight line up to 5 tiles away,
 
 `go run . -shot frame.png` saves one rendered frame and exits, for checking rendering.
 
-`NINEDEEP_SIM=1 go test -run Balance -v` plays 300 seeded runs with three bots and prints win rates, for tuning. The bots see the whole floor.
+`UNDERWICK_SIM=1 go test -run Balance -v` plays 300 seeded runs with three bots and prints win rates, for tuning. The bots see the whole floor.
 
 ## Credits
 

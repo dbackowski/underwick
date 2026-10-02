@@ -10,10 +10,10 @@ import (
 // TestBalance plays many seeded runs with three bots and logs how they went. It is a tuning
 // aid, not a pass/fail check, so it only runs on request:
 //
-//	NINEDEEP_SIM=1 go test -run Balance -v
+//	UNDERWICK_SIM=1 go test -run Balance -v
 func TestBalance(t *testing.T) {
-	if os.Getenv("NINEDEEP_SIM") == "" {
-		t.Skip("set NINEDEEP_SIM=1 to run the balance simulation")
+	if os.Getenv("UNDERWICK_SIM") == "" {
+		t.Skip("set UNDERWICK_SIM=1 to run the balance simulation")
 	}
 	const runs = 300
 	for _, b := range []struct {
