@@ -281,3 +281,19 @@ func TestSparkHaunts(t *testing.T) {
 		}
 	}
 }
+
+func TestFOV(t *testing.T) {
+	w := NewWorld([]string{
+		"#########",
+		"#@..#...#",
+		"#########",
+	})
+	if !w.Visible[1][3] || !w.Visible[1][4] || w.Visible[1][5] {
+		t.Fatalf("should see up to and including the wall, not past it, got %v", w.Visible[1])
+	}
+	w.Player.X = 7 // as if it walked around
+	w.updateFOV()
+	if w.Visible[1][2] || !w.Seen[1][2] {
+		t.Fatal("tiles out of sight should stay remembered")
+	}
+}

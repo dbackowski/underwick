@@ -11,6 +11,7 @@ const (
 	sparkTurns = 3 // turns a bare spark survives without a body
 	sight      = 6 // how far (in steps) monsters notice the player
 	crumble    = 6 // turns a broken monster lasts before it falls apart, if nobody possesses it
+	viewRadius = 7 // how far the player sees, in tiles
 )
 
 // Kind is a body type. Name doubles as the sprite prefix.
@@ -81,6 +82,8 @@ type World struct {
 	Monsters  []*Entity
 	Shots     []Shot
 	Log       []string // what happened this step, in order, for the message line
+	Visible   [][]bool // tiles the player sees right now, by [y][x]
+	Seen      [][]bool // tiles the player has ever seen on this floor
 	SparkLeft int      // turns left to find a body while the player is a bare spark
 	Depth     int      // current floor, 1 to floors
 	Over      bool
@@ -103,7 +106,48 @@ func NewWorld(level []string) *World {
 			}
 		}
 	}
+	w.Seen = grid(level)
+	w.updateFOV()
 	return w
+}
+
+func grid(level []string) [][]bool {
+	g := make([][]bool, len(level))
+	for y := range g {
+		g[y] = make([]bool, len(level[y]))
+	}
+	return g
+}
+
+// updateFOV marks the tiles within viewRadius that the player has a clear line to, walls included.
+func (w *World) updateFOV() {
+	p := w.Player
+	w.Visible = grid(w.Level)
+	for y := max(0, p.Y-viewRadius); y <= min(len(w.Level)-1, p.Y+viewRadius); y++ {
+		for x := max(0, p.X-viewRadius); x <= min(len(w.Level[y])-1, p.X+viewRadius); x++ {
+			if (x-p.X)*(x-p.X)+(y-p.Y)*(y-p.Y) <= viewRadius*viewRadius && w.canSee(p.X, p.Y, x, y) {
+				w.Visible[y][x], w.Seen[y][x] = true, true
+			}
+		}
+	}
+	// A sight line to a wall off the straight axes stops at the wall beside it, so a room's walls
+	// would show in patches. Show every wall touching a visible floor tile instead.
+	for y := range w.Level {
+		for x := range w.Level[y] {
+			if w.Level[y][x] != '#' || w.Visible[y][x] {
+				continue
+			}
+			for dy := -1; dy <= 1; dy++ {
+				for dx := -1; dx <= 1; dx++ {
+					nx, ny := x+dx, y+dy
+					if ny >= 0 && ny < len(w.Level) && nx >= 0 && nx < len(w.Level[ny]) &&
+						w.Level[ny][nx] != '#' && w.Visible[ny][nx] {
+						w.Visible[y][x], w.Seen[y][x] = true, true
+					}
+				}
+			}
+		}
+	}
 }
 
 // NewGame starts a run on a generated first floor. The same seed always builds the same floors.
@@ -130,7 +174,8 @@ func (w *World) descend() {
 	}
 	next := NewWorld(generate(w.rng, w.Depth, boss))
 	w.Player.X, w.Player.Y = next.Player.X, next.Player.Y
-	w.Level, w.Monsters = next.Level, next.Monsters
+	w.Level, w.Monsters, w.Seen = next.Level, next.Monsters, next.Seen
+	defer w.updateFOV()
 	w.acted = 0
 	w.say("Deep %d.", w.Depth)
 	for _, m := range w.Monsters {
@@ -152,6 +197,7 @@ func (w *World) Step(dx, dy int) {
 	if w.Over {
 		return
 	}
+	defer w.updateFOV()
 	w.Shots, w.Log = nil, nil
 	w.Player.Anim = "idle"
 	for _, m := range w.Monsters {

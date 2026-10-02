@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	mapW, mapH = 20, 15
+	mapW, mapH = 40, 30
 	floors     = 9
 )
 
@@ -33,14 +33,14 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 		}
 
 		var rooms []room
-		for range 50 {
-			r := room{w: 3 + rng.IntN(5), h: 3 + rng.IntN(3)}
+		for range 200 {
+			r := room{w: 3 + rng.IntN(7), h: 3 + rng.IntN(4)}
 			r.x, r.y = 1+rng.IntN(mapW-1-r.w), 1+rng.IntN(mapH-1-r.h)
 			if !slices.ContainsFunc(rooms, r.overlaps) {
 				rooms = append(rooms, r)
 			}
 		}
-		if len(rooms) < 3 {
+		if len(rooms) < 6 {
 			continue // too cramped to be interesting; roll again
 		}
 
@@ -51,17 +51,24 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 				}
 			}
 		}
-		// Chaining each room to the previous one keeps the whole floor connected.
-		for i := 1; i < len(rooms); i++ {
-			ax, ay := rooms[i-1].center()
-			bx, by := rooms[i].center()
-			if rng.IntN(2) == 0 {
-				carve(g, ax, bx, ay, true)
-				carve(g, ay, by, bx, false)
-			} else {
-				carve(g, ay, by, ax, false)
-				carve(g, ax, bx, by, true)
+		// Join each room to its nearest already-joined one, so the floor is connected by short
+		// corridors, then add a couple of extra ones for loops to run around.
+		joined, rest := rooms[:1], slices.Clone(rooms[1:])
+		for len(rest) > 0 {
+			var bi, bj int
+			for i, r := range rest {
+				for j, o := range joined {
+					if dist(r, o) < dist(rest[bi], joined[bj]) {
+						bi, bj = i, j
+					}
+				}
 			}
+			link(g, rng, rest[bi], joined[bj])
+			joined = append(slices.Clip(joined), rest[bi])
+			rest = slices.Delete(rest, bi, bi+1)
+		}
+		for range 2 {
+			link(g, rng, rooms[rng.IntN(len(rooms))], rooms[rng.IntN(len(rooms))])
 		}
 
 		sx, sy := rooms[0].center()
@@ -90,7 +97,7 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 		rng.Shuffle(len(spots), func(i, j int) { spots[i], spots[j] = spots[j], spots[i] })
 		// ponytail: flat difficulty curve, more monsters and more orcs per floor; tune once the game is played
 		pool := "rrraa" + strings.Repeat("o", depth/2)
-		n := min(2+depth, len(spots))
+		n := min(4+2*depth, len(spots))
 		if boss != 0 {
 			// Minions stand closest to the boss, so a body dying in the fight has others in reach.
 			slices.SortStableFunc(spots, func(a, b [2]int) int {
@@ -101,7 +108,7 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 			}
 			spots = spots[min(minions, len(spots)):]
 			rng.Shuffle(len(spots), func(i, j int) { spots[i], spots[j] = spots[j], spots[i] })
-			n = min(max(0, 2+depth-minions), len(spots))
+			n = min(max(0, 4+2*depth-minions), len(spots))
 		}
 		for _, s := range spots[:n] {
 			g[s[1]][s[0]] = pool[rng.IntN(len(pool))]
@@ -112,6 +119,25 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 			level[y] = string(g[y])
 		}
 		return level
+	}
+}
+
+func dist(a, b room) int {
+	ax, ay := a.center()
+	bx, by := b.center()
+	return abs(ax-bx) + abs(ay-by)
+}
+
+// link digs an L-shaped corridor between two rooms' centres, turning at a random corner.
+func link(g [][]byte, rng *rand.Rand, a, b room) {
+	ax, ay := a.center()
+	bx, by := b.center()
+	if rng.IntN(2) == 0 {
+		carve(g, ax, bx, ay, true)
+		carve(g, ay, by, bx, false)
+	} else {
+		carve(g, ay, by, ax, false)
+		carve(g, ax, bx, by, true)
 	}
 }
 
