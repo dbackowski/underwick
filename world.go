@@ -29,29 +29,31 @@ type Kind struct {
 
 	Missile string // FX sprite of what a ranged attack fires; "arrow" picks arrow_x or arrow_y
 	Boss    bool   // guards a floor's stairs, which open when it dies
+
+	Poisons, Confuses int // percent chance a hit also poisons or confuses
 }
 
-// hero is the warrior's base, before levels and gear; it starts with a sword, see newRun.
-var hero = Kind{Name: "warrior", MaxHP: 20, Atk: 2, Def: 1, Dmg: 2, Moves: 1, Range: 1}
+// hero is the warrior's base, before levels and gear: the class tests use.
+var hero = classes[0].Kind
 
 // kinds maps a level character to a monster type.
 // kinds maps a level character to a monster type.
 var kinds = map[byte]Kind{
 	'r': {Name: "rat", Depth: 1, XP: 2, MaxHP: 4, Dmg: 2, Moves: 2, Range: 1},                 // fast and fragile
 	'b': {Name: "bat", Depth: 1, XP: 2, MaxHP: 3, Atk: 1, Def: 2, Dmg: 2, Moves: 2, Range: 1}, // fast, hard to hit
-	's': {Name: "snake", Depth: 1, XP: 3, MaxHP: 6, Atk: 1, Dmg: 3, Moves: 1, Range: 1},
+	's': {Name: "snake", Depth: 1, XP: 3, MaxHP: 6, Atk: 1, Dmg: 3, Moves: 1, Range: 1, Poisons: 30},
 	'j': {Name: "slime", Depth: 2, XP: 3, MaxHP: 10, Dmg: 2, Moves: 1, Range: 1},                              // soaks up hits
 	'g': {Name: "gobwar", Depth: 2, XP: 5, MaxHP: 8, Atk: 1, Def: 1, Dmg: 4, Moves: 1, Range: 1},              // goblin warrior
 	'a': {Name: "gobarcher", Depth: 2, XP: 5, MaxHP: 6, Atk: 1, Dmg: 3, Moves: 1, Range: 5, Missile: "arrow"}, // shoots down a line
 	'w': {Name: "wolf", Depth: 3, XP: 7, MaxHP: 8, Atk: 2, Dmg: 4, Moves: 2, Range: 1},                        // fast
 	'k': {Name: "skel", Depth: 4, XP: 8, MaxHP: 12, Atk: 2, Def: 2, Dmg: 5, Moves: 1, Range: 1},               // skeleton
-	'p': {Name: "spider", Depth: 4, XP: 8, MaxHP: 10, Atk: 3, Def: 1, Dmg: 4, Moves: 1, Range: 1},
+	'p': {Name: "spider", Depth: 4, XP: 8, MaxHP: 10, Atk: 3, Def: 1, Dmg: 4, Moves: 1, Range: 1, Poisons: 40},
 	'z': {Name: "zombie", Depth: 5, XP: 9, MaxHP: 20, Atk: 1, Dmg: 6, Moves: 1, Range: 1},       // slow to kill
 	'o': {Name: "orc", Depth: 5, XP: 10, MaxHP: 14, Atk: 3, Def: 2, Dmg: 6, Moves: 1, Range: 1}, // strong
 	'n': {Name: "gnoll", Depth: 6, XP: 12, MaxHP: 16, Atk: 3, Def: 1, Dmg: 7, Moves: 1, Range: 1},
 	'h': {Name: "skelarcher", Depth: 6, XP: 12, MaxHP: 12, Atk: 3, Def: 1, Dmg: 5, Moves: 1, Range: 6, Missile: "arrow"}, // skeleton archer
-	'i': {Name: "imp", Depth: 7, XP: 14, MaxHP: 12, Atk: 4, Def: 2, Dmg: 5, Moves: 2, Range: 1},                          // fast
-	'y': {Name: "ghost", Depth: 8, XP: 16, MaxHP: 16, Atk: 4, Def: 4, Dmg: 6, Moves: 1, Range: 1},                        // hard to hit
+	'i': {Name: "imp", Depth: 7, XP: 14, MaxHP: 12, Atk: 4, Def: 2, Dmg: 5, Moves: 2, Range: 1, Confuses: 30},            // fast
+	'y': {Name: "ghost", Depth: 8, XP: 16, MaxHP: 16, Atk: 4, Def: 4, Dmg: 6, Moves: 1, Range: 1, Confuses: 20},          // hard to hit
 	'v': {Name: "skelwar", Depth: 9, XP: 18, MaxHP: 24, Atk: 4, Def: 3, Dmg: 8, Moves: 1, Range: 1},                      // skeleton warrior
 	'm': {Name: "skelmage", Depth: 10, XP: 20, MaxHP: 16, Atk: 4, Def: 2, Dmg: 8, Moves: 1, Range: 5, Missile: "proj_blue_ball"},
 	'f': {Name: "flame", Depth: 11, XP: 22, MaxHP: 20, Atk: 5, Def: 2, Dmg: 9, Moves: 1, Range: 3, Missile: "proj_orange_ball"}, // spits fire
@@ -115,6 +117,10 @@ type Entity struct {
 
 	Spotted bool // a monster that noticed the player this step, for the alert icon
 
+	Poison   int // turns left of losing 1 HP a turn
+	Confused int // turns left of stumbling about
+	Sleep    int // turns left asleep; asleep until woken, if negative
+
 	// Monsters only: where the player was last seen, while hunting it.
 	hunting      bool
 	goalX, goalY int
@@ -150,6 +156,10 @@ type World struct {
 	Inventory []*Item
 	Floor     []*Item // items lying on this floor
 
+	Class         *Class
+	Spells        []*Spell
+	Mana, MaxMana int
+
 	rng    *rand.Rand
 	base   Kind                 // the hero's stats before gear; levels raise these
 	faces  map[*ItemKind]string // this run's potion colours and scroll labels
@@ -157,22 +167,29 @@ type World struct {
 	bosses string               // the order this run meets the bosses in, as kind characters
 	regen  int                  // turns since the hero last regained HP
 	warned [2]int               // the lava tile the hero was last warned about
+	manaIn int                  // turns since the hero last regained mana
 }
 
-// NewWorld starts a run on a given level: '#' wall, '>' stairs down, '@' the hero, '*' an item, kind
-// letters for monsters. Tests use it with hand-drawn levels.
+// NewWorld starts a warrior's run on a given level, in the format generate makes. Tests use it with
+// hand-drawn levels.
 func NewWorld(level []string) *World {
-	w := newRun(rand.New(rand.NewPCG(1, 0)))
+	w := newRun(rand.New(rand.NewPCG(1, 0)), classes[0])
 	w.load(level)
 	return w
 }
 
-// newRun makes a fresh hero, carrying and wielding a sword, for a run drawing on rng.
-func newRun(rng *rand.Rand) *World {
-	w := &World{Depth: 1, ExpLevel: 1, rng: rng, base: hero, known: map[*ItemKind]bool{}}
-	w.Player = newEntity(hero, 0, 0)
+// newRun makes a fresh hero of a class, with its starting gear in use, for a run drawing on rng.
+func newRun(rng *rand.Rand, c *Class) *World {
+	w := &World{Depth: 1, ExpLevel: 1, rng: rng, base: c.Kind, known: map[*ItemKind]bool{}, Class: c}
+	w.Player = newEntity(c.Kind, 0, 0)
 	w.shuffleFaces()
-	w.Inventory = []*Item{{ItemKind: kindNamed("sword"), Worn: true}}
+	for _, name := range c.Start {
+		w.Inventory = append(w.Inventory, &Item{ItemKind: kindNamed(name), Worn: true})
+	}
+	for _, name := range c.Spells {
+		w.Spells = append(w.Spells, spellNamed(name))
+	}
+	w.Mana, w.MaxMana = c.Mana, c.Mana
 	w.recalc()
 	return w
 }
@@ -216,6 +233,15 @@ func (w *World) load(level []string) {
 	w.updateFOV()
 }
 
+// settle sends a third of a new floor's monsters to sleep, until something wakes them.
+func (w *World) settle() {
+	for _, m := range w.Monsters {
+		if !m.Boss && w.rng.IntN(3) == 0 {
+			m.Sleep = -1
+		}
+	}
+}
+
 func (w *World) setTile(x, y int, c byte) { w.Level[y] = w.Level[y][:x] + string(c) + w.Level[y][x+1:] }
 
 func grid(level []string) [][]bool {
@@ -257,11 +283,13 @@ func (w *World) updateFOV() {
 	}
 }
 
-// NewGame starts a run on a generated first floor. The same seed always plays out the same way.
-func NewGame(seed uint64) *World {
+// NewGame starts a run as a class on a generated first floor. The same seed and class always play out
+// the same way.
+func NewGame(seed uint64, c *Class) *World {
 	rng := rand.New(rand.NewPCG(seed, 0))
-	w := newRun(rng)
+	w := newRun(rng, c)
 	w.load(generate(rng, 1, 0))
+	w.settle()
 	for _, i := range rng.Perm(len(bossKinds)) {
 		w.bosses += bossKinds[i : i+1]
 	}
@@ -292,6 +320,10 @@ func (w *World) gainXP(n int) {
 		}
 		w.recalc()
 		w.Player.HP += 5
+		if w.MaxMana > 0 {
+			w.MaxMana += 2
+			w.Mana += 2
+		}
 		w.say("You reach level %d!", w.ExpLevel)
 	}
 }
@@ -305,6 +337,7 @@ func (w *World) descend() {
 		boss = w.bosses[(round-1)%len(w.bosses)]
 	}
 	w.load(generate(w.rng, w.Depth, boss))
+	w.settle()
 	w.say("Deep %d.", w.Depth)
 	for _, m := range w.Monsters {
 		if m.Boss { // each boss after the first gets half its base HP and 1 damage more
@@ -382,6 +415,22 @@ func (w *World) turn(act func()) {
 		}
 	}
 	w.monstersAct()
+
+	if w.Mana < w.MaxMana {
+		if w.manaIn++; w.manaIn >= manaEvery {
+			w.manaIn = 0
+			w.Mana++
+		}
+	}
+	if p.Confused > 0 {
+		if p.Confused--; p.Confused == 0 {
+			w.say("You feel steadier.")
+		}
+	}
+	if p.Poison > 0 && !w.Over {
+		p.Poison--
+		w.damage(p, 1)
+	}
 }
 
 func (w *World) monstersAct() {
@@ -424,6 +473,11 @@ func (w *World) openChest(x, y int) {
 
 func (w *World) playerAct(dx, dy int) {
 	p := w.Player
+	if p.Confused > 0 && w.rng.IntN(2) == 0 {
+		d := dirs[w.rng.IntN(len(dirs))]
+		dx, dy = d[0], d[1]
+		w.say("You stumble.")
+	}
 	p.Dir = dirName(dx, dy)
 	if t := w.firstInLine(p, dx, dy, p.Range); t != nil {
 		w.attack(p, t)
@@ -463,6 +517,23 @@ func (w *World) act(m *Entity) {
 	p := w.Player
 	dx, dy := p.X-m.X, p.Y-m.Y
 	dist := abs(dx) + abs(dy)
+	switch {
+	case m.Sleep > 0: // put to sleep: it wakes when the time is up
+		m.Sleep--
+		return
+	case m.Sleep < 0: // asleep on its own: each turn it could see the hero, it may wake
+		odds := 4
+		if w.Class != nil && w.Class.Stealth {
+			odds = 8
+		}
+		if dist > sight || !w.canSee(m.X, m.Y, p.X, p.Y) || w.rng.IntN(odds) > 0 {
+			return
+		}
+		m.Sleep = 0
+		if w.Visible[m.Y][m.X] {
+			w.say("The %s wakes up.", m.Name)
+		}
+	}
 	if (dx == 0 || dy == 0) && w.firstInLine(m, sign(dx), sign(dy), m.Range) == p {
 		m.Dir = dirName(dx, dy)
 		w.attack(m, p)
@@ -557,8 +628,13 @@ func (w *World) firstInLine(from *Entity, dx, dy, n int) *Entity {
 }
 
 // hitChance is the percent chance that a's attack lands on t: 70%, plus 5% per point of accuracy
-// over the target's armour, never certain either way.
-func hitChance(a, t *Entity) int { return min(max(70+5*(a.Atk-t.Def), 5), 95) }
+// over the target's armour, never certain either way, except against a sleeper.
+func hitChance(a, t *Entity) int {
+	if t.Sleep != 0 {
+		return 100
+	}
+	return min(max(70+5*(a.Atk-t.Def), 5), 95)
+}
 
 func (w *World) attack(a, t *Entity) {
 	a.Anim = "atk"
@@ -579,10 +655,22 @@ func (w *World) attack(a, t *Entity) {
 		w.say("The %s hits.", a.Name)
 	}
 	w.damage(t, 1+w.rng.IntN(a.Dmg))
+	if t.HP <= 0 || t != w.Player {
+		return
+	}
+	if w.rng.IntN(100) < a.Poisons {
+		t.Poison += 4 + w.Depth/2
+		w.say("You are poisoned!")
+	}
+	if w.rng.IntN(100) < a.Confuses {
+		t.Confused = 4
+		w.say("You feel confused!")
+	}
 }
 
 func (w *World) damage(e *Entity, n int) {
 	e.HP -= n
+	e.Sleep = 0
 	if e.HP > 0 {
 		return
 	}

@@ -83,7 +83,7 @@ func TestGold(t *testing.T) {
 }
 
 func TestStocking(t *testing.T) {
-	w := NewGame(3)
+	w := NewGame(3, classes[0])
 	if len(w.Floor) == 0 {
 		t.Fatal("a generated floor should have items on it")
 	}

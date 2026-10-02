@@ -7,7 +7,8 @@ import (
 	"testing"
 )
 
-// TestBalance plays many seeded runs with two bots and logs how deep they got. It is a tuning
+// TestBalance plays many seeded runs with bots and logs how deep they got: the diver as a warrior, and
+// the tactician as every class. It is a tuning
 // aid, not a pass/fail check, so it only runs on request:
 //
 //	UNDERWICK_SIM=1 go test -run Balance -v
@@ -16,20 +17,26 @@ func TestBalance(t *testing.T) {
 		t.Skip("set UNDERWICK_SIM=1 to run the balance simulation")
 	}
 	const runs = 300
-	for _, b := range []struct {
-		name string
-		play func(*World) (int, int)
-	}{{"diver", diver}, {"tactician", tactician}} {
+	type bot struct {
+		name  string
+		class *Class
+		play  func(*World) (int, int)
+	}
+	bots := []bot{{"diver", classes[0], diver}}
+	for _, c := range classes {
+		bots = append(bots, bot{"tact " + c.Name, c, tactician})
+	}
+	for _, b := range bots {
 		var gear int
 		potionsDrunk = 0
 		var depths []int
 		var score, turns, stuck int
 		deaths := make([]int, 16) // by depth; the last bucket counts everything deeper
 		for seed := range uint64(runs) {
-			w := NewGame(seed)
+			w := NewGame(seed, b.class)
 			n := 0
 			for ; !w.Over && n < 20000; n++ {
-				if b.name == "tactician" && w.botItems() {
+				if b.name != "diver" && w.botItems() {
 					continue // an item action used the turn
 				}
 				w.Step(b.play(w))
@@ -49,7 +56,7 @@ func TestBalance(t *testing.T) {
 			deaths[min(w.Depth, len(deaths))-1]++
 		}
 		slices.Sort(depths)
-		t.Logf("%-9s stuck %d  depth median %d, best %d  score avg %d  turns/run %d  potions/run %.1f  armour worn at death %.1f  deaths by depth %v",
+		t.Logf("%-14s stuck %d  depth median %d, best %d  score avg %d  turns/run %d  potions/run %.1f  armour worn at death %.1f  deaths by depth %v",
 			b.name, stuck, depths[runs/2], depths[runs-1], score/runs, turns/runs, float64(potionsDrunk)/runs, float64(gear)/runs, deaths)
 	}
 }
@@ -168,6 +175,24 @@ var (
 // anything better than what it has on, and reading unknown scrolls when nothing is hunting it.
 func (w *World) botItems() bool {
 	p := w.Player
+	// Magic first: heal when hurt, and bolt anything in line.
+	for i, s := range w.Spells {
+		if w.Mana < s.Cost {
+			continue
+		}
+		if s.Name == "heal" && p.HP*2 < p.MaxHP {
+			w.Cast(i, 0, 0)
+			return true
+		}
+		if s.Name == "fire bolt" {
+			for _, d := range dirs {
+				if t := w.firstInLine(p, d[0], d[1], 6); t != nil && t != p {
+					w.Cast(i, d[0], d[1])
+					return true
+				}
+			}
+		}
+	}
 	safe := w.nearest(func(m *Entity) bool { return m.hunting }) == nil
 	if p.HP*5 < p.MaxHP*2 {
 		best := -1

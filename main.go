@@ -63,7 +63,8 @@ type Game struct {
 	floor    *ebiten.Image // the whole floor, drawn before the camera picks the part on screen
 	low      *ebiten.Image // the screen at the art's own size, enlarged by scale with hard pixel edges
 	labels   []label       // text for this frame, drawn after the enlargement at full resolution
-	mode     string        // "" while playing, or "use" / "drop" while choosing an inventory item
+	mode     string        // "" while playing; "class", "use", "drop", "cast" or "aim" while choosing
+	spell    int           // the spell being aimed
 	tick     int
 	turnTick int // tick of the last turn, to time its animations
 }
@@ -111,70 +112,142 @@ func justPressed(keys ...ebiten.Key) bool {
 	return slices.ContainsFunc(keys, inpututil.IsKeyJustPressed)
 }
 
+// direction reads a just-pressed arrow key or WASD.
+func direction() (dx, dy int) {
+	switch {
+	case justPressed(ebiten.KeyArrowLeft, ebiten.KeyA):
+		return -1, 0
+	case justPressed(ebiten.KeyArrowRight, ebiten.KeyD):
+		return 1, 0
+	case justPressed(ebiten.KeyArrowUp, ebiten.KeyW):
+		return 0, -1
+	case justPressed(ebiten.KeyArrowDown, ebiten.KeyS):
+		return 0, 1
+	}
+	return 0, 0
+}
+
+// letter returns the index of a letter typed this frame, a being 0, if it is below n.
+func letter(n int) (int, bool) {
+	for _, r := range ebiten.AppendInputChars(nil) {
+		if i := int(r - 'a'); i >= 0 && i < n {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
 func (g *Game) Update() error {
 	g.tick++
+	if g.world == nil || g.mode == "class" {
+		g.mode = "class"
+		if i, ok := letter(len(classes)); ok {
+			g.world, g.mode = NewGame(rand.Uint64(), classes[i]), ""
+		}
+		return nil
+	}
 	w := g.world
 	if w.Over {
 		if justPressed(ebiten.KeyR) {
-			g.world, g.mode = NewGame(rand.Uint64()), ""
+			g.mode = "class"
 		}
 		return nil
 	}
+	dx, dy := direction()
 
-	if g.mode != "" { // choosing an item: a letter picks it, Escape gives up
+	switch g.mode { // choosing: a letter picks, Escape gives up
+	case "use", "drop", "cast":
 		if justPressed(ebiten.KeyEscape) {
 			g.mode = ""
+			return nil
 		}
-		for _, r := range ebiten.AppendInputChars(nil) {
-			if i := int(r - 'a'); i >= 0 && i < len(w.Inventory) {
-				if g.mode == "drop" {
-					w.Drop(i)
-				} else {
-					w.Use(i)
-				}
-				g.mode = ""
-				g.turnTick = g.tick
-			}
+		n := len(w.Inventory)
+		if g.mode == "cast" {
+			n = len(w.Spells)
+		}
+		i, ok := letter(n)
+		if !ok {
+			return nil
+		}
+		switch {
+		case g.mode == "drop":
+			w.Drop(i)
+		case g.mode == "use":
+			w.Use(i)
+		case w.Spells[i].Aimed:
+			g.mode, g.spell = "aim", i
+			w.Log = []string{"Cast it which way? (Esc to cancel)"}
+			return nil
+		default:
+			w.Cast(i, 0, 0)
+		}
+		g.mode, g.turnTick = "", g.tick
+		return nil
+	case "aim":
+		if justPressed(ebiten.KeyEscape) {
+			g.mode, w.Log = "", nil
+		} else if dx != 0 || dy != 0 {
+			w.Cast(g.spell, dx, dy)
+			g.mode, g.turnTick = "", g.tick
 		}
 		return nil
 	}
 
-	dx, dy, acted := 0, 0, true
 	switch {
-	case justPressed(ebiten.KeyArrowLeft, ebiten.KeyA):
-		dx = -1
-	case justPressed(ebiten.KeyArrowRight, ebiten.KeyD):
-		dx = 1
-	case justPressed(ebiten.KeyArrowUp, ebiten.KeyW):
-		dy = -1
-	case justPressed(ebiten.KeyArrowDown, ebiten.KeyS):
-		dy = 1
-	case justPressed(ebiten.KeySpace, ebiten.KeyPeriod):
+	case dx != 0 || dy != 0, justPressed(ebiten.KeySpace, ebiten.KeyPeriod):
+		w.Step(dx, dy)
 	case justPressed(ebiten.KeyG):
 		w.PickUp()
-		g.turnTick, acted = g.tick, false
 	case justPressed(ebiten.KeyI):
-		g.mode, acted = "use", false
+		g.mode = "use"
 	case justPressed(ebiten.KeyX):
-		g.mode, acted = "drop", false
+		g.mode = "drop"
+	case justPressed(ebiten.KeyC):
+		if len(w.Spells) == 0 {
+			w.Log = []string{"You know no spells."}
+		} else {
+			g.mode = "cast"
+		}
 	default:
-		acted = false
+		return nil
 	}
-	if acted {
-		w.Step(dx, dy)
-		g.turnTick = g.tick
-	}
+	g.turnTick = g.tick
 	return nil
 }
 
 func (g *Game) Draw(out *ebiten.Image) {
-	w := g.world
 	if g.low == nil {
 		g.low = ebiten.NewImage(screenW, screenH)
 	}
 	screen := g.low
 	screen.Fill(color.Black)
 	g.labels = g.labels[:0]
+	if g.world != nil {
+		g.drawWorld(screen)
+	}
+	if g.mode == "class" {
+		g.labels = g.labels[:0] // the panel covers everything
+		g.drawClasses(screen)
+	}
+
+	// The art, enlarged with hard pixel edges, then the text over it at full resolution.
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Scale(scale, scale)
+	out.DrawImage(screen, op)
+	for _, l := range g.labels {
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(l.x*scale, l.y*scale)
+		op.ColorScale.ScaleWithColor(l.c)
+		text.Draw(out, l.s, font, op)
+	}
+	if *shot != "" && g.tick > 30 { // let a few idle frames pass first
+		saveShot(out, *shot)
+	}
+}
+
+// drawWorld draws the floor around the hero, the HUD, the messages and any open panel.
+func (g *Game) drawWorld(screen *ebiten.Image) {
+	w := g.world
 	if g.floor == nil {
 		g.floor = ebiten.NewImage(mapW*tile, mapH*tile)
 	}
@@ -223,11 +296,20 @@ func (g *Game) Draw(out *ebiten.Image) {
 		if m.HP < m.MaxHP {
 			hpBar(dst, x, y, width, 1, m.HP, m.MaxHP)
 		}
+		icon := statusIcon(m)
 		if m.Spotted {
+			icon = "status_alert"
+		}
+		if icon != "" {
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Translate(float64(x+width/2-4), float64(y-9)) // FX sprites are 8px
-			dst.DrawImage(g.sprite(fmt.Sprintf("FX/status_alert_%d", g.tick/10%2+1)), op)
+			dst.DrawImage(g.sprite(fmt.Sprintf("FX/%s_%d", icon, g.tick/10%2+1)), op)
 		}
+	}
+	if icon := statusIcon(w.Player); icon != "" {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(float64(w.Player.X*tile+2), float64(w.Player.Y*tile-9))
+		dst.DrawImage(g.sprite(fmt.Sprintf("FX/%s_%d", icon, g.tick/10%2+1)), op)
 	}
 
 	// Missiles fly from shooter to target while the turn's animation plays.
@@ -257,13 +339,19 @@ func (g *Game) Draw(out *ebiten.Image) {
 	cy := min(max(w.Player.Y-viewH/2, 0), mapH-viewH)
 	screen.DrawImage(dst.SubImage(image.Rect(cx*tile, cy*tile, (cx+viewW)*tile, (cy+viewH)*tile)).(*ebiten.Image), nil)
 
-	// HUD: the hero's HP and level, a visible boss's HP, gold and the depth.
+	// HUD: the hero's HP, mana and level, a visible boss's HP, gold and the depth.
 	hud := float64(viewH*tile + 2)
-	hpBar(screen, 2, float32(hud+2), 44, 4, max(w.Player.HP, 0), w.Player.MaxHP)
-	g.label(fmt.Sprintf("%d/%d L%d", max(w.Player.HP, 0), w.Player.MaxHP, w.ExpLevel), 50, hud, white)
+	hpBar(screen, 2, float32(hud+1), 44, 4, max(w.Player.HP, 0), w.Player.MaxHP)
+	stats := fmt.Sprintf("%d/%d", max(w.Player.HP, 0), w.Player.MaxHP)
+	if w.MaxMana > 0 {
+		vector.FillRect(screen, 2, float32(hud+6), 44, 2, color.RGBA{0x10, 0x20, 0x50, 0xff}, false)
+		vector.FillRect(screen, 2, float32(hud+6), 44*float32(w.Mana)/float32(w.MaxMana), 2, color.RGBA{0x40, 0x80, 0xff, 0xff}, false)
+		stats += fmt.Sprintf(" %dmp", w.Mana)
+	}
+	g.label(fmt.Sprintf("%s L%d", stats, w.ExpLevel), 50, hud, white)
 	for _, m := range w.Monsters {
 		if m.Boss && w.Visible[m.Y][m.X] {
-			hpBar(screen, 108, float32(hud+2), 44, 4, m.HP, m.MaxHP)
+			hpBar(screen, 116, float32(hud+2), 38, 4, m.HP, m.MaxHP)
 		}
 	}
 	g.label(fmt.Sprintf("$%d  Deep %d", w.Gold, w.Depth), 160, hud, yellow)
@@ -275,26 +363,46 @@ func (g *Game) Draw(out *ebiten.Image) {
 	}
 
 	switch {
-	case g.mode != "":
+	case g.mode == "use", g.mode == "drop":
 		g.labels = g.labels[:0] // the panel covers the HUD and messages
 		g.drawInventory(screen)
-	case w.Over:
+	case g.mode == "cast":
+		g.labels = g.labels[:0]
+		g.drawSpells(screen)
+	case w.Over && g.mode != "class":
 		panel(screen, 30, 66, screenW-60, 32)
 		g.label(fmt.Sprintf("You died on depth %d. Score %d.", w.Depth, w.Score()), 38, 72, white)
-		g.label("Press R to play again.", 38, 72+lineH+2, grey)
+		g.label("Press R to choose a new hero.", 38, 72+lineH+2, grey)
 	}
-	// The art, enlarged with hard pixel edges, then the text over it at full resolution.
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Scale(scale, scale)
-	out.DrawImage(screen, op)
-	for _, l := range g.labels {
-		op := &text.DrawOptions{}
-		op.GeoM.Translate(l.x*scale, l.y*scale)
-		op.ColorScale.ScaleWithColor(l.c)
-		text.Draw(out, l.s, font, op)
+}
+
+// drawClasses lets the player pick a hero for a new run.
+func (g *Game) drawClasses(screen *ebiten.Image) {
+	panel(screen, 2, 2, screenW-4, screenH-4)
+	g.label("UNDERWICK", 6, 5, yellow)
+	g.label("Choose your hero:", 6, 5+lineH+3, white)
+	for i, c := range classes {
+		y := 5 + float64(i)*3*lineH + 3*lineH
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(8, y)
+		screen.DrawImage(g.sprite(fmt.Sprintf("Character/%s_idle_d_%d", c.Name, g.tick/20%2+1)), op)
+		g.label(fmt.Sprintf("%c) %s", 'a'+i, strings.ToUpper(c.Name[:1])+c.Name[1:]), 24, y, white)
+		g.label(c.About, 24, y+lineH, grey)
 	}
-	if *shot != "" && g.tick > 30 { // let a few idle frames pass first
-		saveShot(out, *shot)
+	g.label("Art by Oryx Design Lab, oryxdesignlab.com", 6, screenH-4-lineH-2, grey)
+}
+
+// drawSpells lists the spells the hero knows, lettered, for casting.
+func (g *Game) drawSpells(screen *ebiten.Image) {
+	w := g.world
+	panel(screen, 2, 2, screenW-4, screenH-4)
+	g.label(fmt.Sprintf("Cast which? You have %d mana. (Esc to close)", w.Mana), 6, 4, yellow)
+	for i, s := range w.Spells {
+		c := white
+		if s.Cost > w.Mana {
+			c = grey
+		}
+		g.label(fmt.Sprintf("%c) %s, %d mana", 'a'+i, s.Name, s.Cost), 6, 4+float64(i+1)*lineH+2, c)
 	}
 }
 
@@ -388,6 +496,19 @@ func panel(dst *ebiten.Image, x, y, w, h float32) {
 	vector.StrokeRect(dst, x, y, w, h, 1, grey, false)
 }
 
+// statusIcon names the FX icon for a creature's worst condition, or "" if it has none.
+func statusIcon(e *Entity) string {
+	switch {
+	case e.Sleep != 0:
+		return "status_sleep"
+	case e.Confused > 0:
+		return "status_confuse"
+	case e.Poison > 0:
+		return "status_poisoned"
+	}
+	return ""
+}
+
 // dim is how bright to draw a seen tile: full in sight, dim when only remembered.
 func dim(w *World, x, y int) float32 {
 	if w.Visible[y][x] {
@@ -464,7 +585,7 @@ func main() {
 	font = loadFont()
 	ebiten.SetWindowSize(screenW*scale, screenH*scale)
 	ebiten.SetWindowTitle("Underwick")
-	if err := ebiten.RunGame(&Game{sprites: loadSprites(), world: NewGame(rand.Uint64())}); err != nil {
+	if err := ebiten.RunGame(&Game{sprites: loadSprites()}); err != nil {
 		log.Fatal(err)
 	}
 }

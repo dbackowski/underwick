@@ -80,7 +80,7 @@ func TestStairs(t *testing.T) {
 }
 
 func TestBosses(t *testing.T) {
-	w := NewGame(7)
+	w := NewGame(7, classes[0])
 	if len(w.bosses) != len(bossKinds) {
 		t.Fatalf("a run should meet all %d bosses in turn, got %q", len(bossKinds), w.bosses)
 	}

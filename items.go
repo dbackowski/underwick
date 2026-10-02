@@ -14,8 +14,9 @@ type ItemKind struct {
 	Slot   string // where it is worn; "" for potions and scrolls, "gold" for gold, "key" for keys
 
 	Atk, Def, Dmg, MaxHP int // bonuses while worn
+	Range                int // for a ranged weapon, how far it shoots
 
-	Class  byte // 'p' potion or 's' scroll: unidentified until used
+	Class  byte // 'p' potion or 's' scroll, unidentified until used; 't' tome
 	Depth  int  // the shallowest floor it appears on
 	Weight int  // how common it is among the items that can appear
 
@@ -37,6 +38,7 @@ var itemKinds = []*ItemKind{
 	{Name: "spear", Sprite: "object_spear", Slot: "weapon", Dmg: 5, Depth: 3, Weight: 2},
 	{Name: "axe", Sprite: "object_axe", Slot: "weapon", Dmg: 6, Atk: -1, Depth: 4, Weight: 2},
 	{Name: "hammer", Sprite: "object_hammer", Slot: "weapon", Dmg: 8, Atk: -2, Depth: 6, Weight: 2},
+	{Name: "bow", Sprite: "object_bow", Slot: "weapon", Dmg: 3, Range: 5, Depth: 2, Weight: 2},
 
 	{Name: "helm", Sprite: "object_helm", Slot: "head", Def: 1, Depth: 1, Weight: 3},
 	{Name: "wooden shield", Sprite: "object_shield_wood", Slot: "shield", Def: 1, Depth: 1, Weight: 3},
@@ -62,8 +64,8 @@ var itemKinds = []*ItemKind{
 		w.say("You feel more robust.")
 	}},
 	{Name: "potion of poison", Class: 'p', Depth: 1, Weight: 3, use: func(w *World) {
-		w.Player.HP = max(1, w.Player.HP-5-w.Depth/2)
-		w.say("You feel sick.")
+		w.Player.Poison += 5 + w.Depth/2
+		w.say("You feel very sick.")
 	}},
 
 	{Name: "scroll of mapping", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) {
@@ -92,6 +94,12 @@ var itemKinds = []*ItemKind{
 	{Name: "scroll of enchant weapon", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) {
 		w.enchant(func(it *Item) bool { return it.Slot == "weapon" }, "weapon")
 	}},
+	// Tomes teach spells; they are never disguised.
+	{Name: "tome of fire bolt", Sprite: "object_tome_brown", Class: 't', Depth: 2, Weight: 1, use: learn("fire bolt")},
+	{Name: "tome of heal", Sprite: "object_tome_blue", Class: 't', Depth: 2, Weight: 1, use: learn("heal")},
+	{Name: "tome of sleep", Sprite: "object_tome_green", Class: 't', Depth: 2, Weight: 1, use: learn("sleep")},
+
+	{Name: "scroll of sleep", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) { w.lull(8) }},
 	{Name: "scroll of enchant armour", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) {
 		w.enchant(func(it *Item) bool { return it.Def > 0 && it.Slot != "ring" }, "armour")
 	}},
@@ -300,6 +308,7 @@ func (w *World) wear(it *Item) {
 // recalc sets the hero's stats: its base, which levels raise, plus everything it wears.
 func (w *World) recalc() {
 	k := w.base
+	k.Range, k.Missile = 1, ""
 	for _, it := range w.Inventory {
 		if !it.Worn {
 			continue
@@ -310,6 +319,9 @@ func (w *World) recalc() {
 		k.MaxHP += it.MaxHP
 		if it.Slot == "weapon" {
 			k.Dmg += it.Plus
+			if it.Range > 0 {
+				k.Range, k.Missile = it.Range, "arrow"
+			}
 		} else {
 			k.Def += it.Plus
 		}

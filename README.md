@@ -14,14 +14,22 @@ The sprites and font are from Oryx Design Lab's [8-Bit Remaster](https://www.ory
 
     go run .
 
-Arrow keys or WASD move and attack, space waits a turn, R starts a new run after death.
-G picks up what you stand on, I opens your pack (a letter uses, wears or takes off an item), X drops
-an item, and Escape closes the pack.
+Pick a hero to start: the warrior (tough, with a sword), the archer (shoots with a bow), the mage (frail,
+casts Fire Bolt), the thief (quiet, so sleeping monsters wake half as often) or the cleric (armoured,
+casts Heal).
+
+Arrow keys or WASD move and attack, space waits a turn, R chooses a new hero after death. G picks up
+what you stand on, I opens your pack (a letter uses, wears or takes off an item), X drops an item, C
+casts a spell (a letter picks it, then a direction aims it if it needs aiming), and Escape closes a
+panel.
 
 Walk into a monster to attack it. A hit lands 70% of the time, plus 5% for each point of your accuracy over
 its armour, and deals 1 up to your weapon's damage. You regain 1 HP every 8 turns.
 
 Monsters within 6 tiles notice you only if they can see you, then hunt you down to where they last saw you.
+A third of them start asleep, waking only by chance once they could see you, or when hit; a sleeper is
+always hit. Snakes and spiders can poison you (1 HP a turn), and imps and ghosts can confuse you (half
+your moves go astray).
 Twenty kinds live at different depths, from rats and bats on floor 1 to flayers and demons below floor 12;
 each floor holds those that first appear there or up to 6 floors above. Some are fast, some shoot along
 straight lines, and every 4 floors below their first appearance they grow a little stronger.
@@ -29,9 +37,14 @@ straight lines, and every 4 floors below their first appearance they grow a litt
 Kills give experience. Going from level l to the next takes 5 x l x l, and each level gives 5 max HP and
 1 accuracy, plus 1 damage every 2nd level and 1 armour every 3rd.
 
-Items lie about the floors, better ones deeper: weapons (dagger, sword, staff, spear, axe, hammer), armour
-for the head, body, hands and feet, shields, rings, an amulet, potions and scrolls. You start with a
-sword. Weapons and armour can be enchanted (sword +2). Potions and scrolls hide what they are: each run
+With a bow in hand, moving toward a monster in a straight line within 5 tiles shoots it. Spells cost mana,
+which comes back 1 every 5 turns and grows with levels: Fire Bolt hits the first monster in a line, Heal
+restores HP and cures poison, and Sleep puts the monsters you can see to sleep. Tomes teach spells, and
+give a hero without magic some mana.
+
+Items lie about the floors, better ones deeper: weapons (dagger, sword, staff, spear, axe, hammer, bow), armour
+for the head, body, hands and feet, shields, rings, an amulet, potions, scrolls and tomes. Each hero starts
+with its own gear in use. Weapons and armour can be enchanted (sword +2). Potions and scrolls hide what they are: each run
 gives the potions their colours and the scrolls their labels anew, and you learn a kind by using one.
 You can carry 20 items. Gold is picked up as you walk over it.
 
@@ -51,8 +64,8 @@ Your score is 100 per floor reached, 10 per kill, 50 per level gained, and your 
 
 `go run . -shot frame.png` saves one rendered frame and exits, for checking rendering.
 
-`UNDERWICK_SIM=1 go test -run Balance -v` plays 300 seeded runs with two bots and prints how deep they got,
-for tuning. The bots see the whole floor.
+`UNDERWICK_SIM=1 go test -run Balance -v` plays 300 seeded runs with bots, a stairs-rushing warrior and a
+careful player as every class, and prints how deep they got, for tuning. The bots see the whole floor.
 
 ## Credits
 
