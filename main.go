@@ -59,6 +59,8 @@ type Game struct {
 	sprites  map[string]*ebiten.Image
 	world    *World
 	floor    *ebiten.Image // the whole floor, drawn before the camera picks the part on screen
+	low      *ebiten.Image // the screen at the art's own size, enlarged by scale with hard pixel edges
+	labels   []label       // text for this frame, drawn after the enlargement at full resolution
 	mode     string        // "" while playing, or "use" / "drop" while choosing an inventory item
 	tick     int
 	turnTick int // tick of the last turn, to time its animations
@@ -99,7 +101,8 @@ func loadFont() *text.GoTextFace {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &text.GoTextFace{Source: src, Size: 8}
+	// At full window resolution: drawn small and enlarged, the glyphs' anti-aliased edges blur.
+	return &text.GoTextFace{Source: src, Size: 8 * scale}
 }
 
 func justPressed(keys ...ebiten.Key) bool {
@@ -162,9 +165,14 @@ func (g *Game) Update() error {
 	return nil
 }
 
-func (g *Game) Draw(screen *ebiten.Image) {
+func (g *Game) Draw(out *ebiten.Image) {
 	w := g.world
+	if g.low == nil {
+		g.low = ebiten.NewImage(screenW, screenH)
+	}
+	screen := g.low
 	screen.Fill(color.Black)
+	g.labels = g.labels[:0]
 	if g.floor == nil {
 		g.floor = ebiten.NewImage(mapW*tile, mapH*tile)
 	}
@@ -253,30 +261,41 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// HUD: the hero's HP and level, a visible boss's HP, gold and the depth.
 	hud := float64(viewH*tile + 2)
 	hpBar(screen, 2, float32(hud+2), 44, 4, max(w.Player.HP, 0), w.Player.MaxHP)
-	say(screen, fmt.Sprintf("%d/%d L%d", max(w.Player.HP, 0), w.Player.MaxHP, w.ExpLevel), 50, hud, white)
+	g.label(fmt.Sprintf("%d/%d L%d", max(w.Player.HP, 0), w.Player.MaxHP, w.ExpLevel), 50, hud, white)
 	for _, m := range w.Monsters {
 		if m.Boss && w.Visible[m.Y][m.X] {
 			hpBar(screen, 108, float32(hud+2), 44, 4, m.HP, m.MaxHP)
 		}
 	}
-	say(screen, fmt.Sprintf("$%d  Deep %d", w.Gold, w.Depth), 160, hud, yellow)
+	g.label(fmt.Sprintf("$%d  Deep %d", w.Gold, w.Depth), 160, hud, yellow)
 
 	// Messages: this turn's events over two lines, dropping the oldest whole messages that don't fit.
 	lines := wrap(w.Log, screenW-4)
 	for i, l := range lines[max(0, len(lines)-2):] {
-		say(screen, l, 2, float64((viewH+1)*tile+i*lineH), white)
+		g.label(l, 2, float64((viewH+1)*tile+i*lineH), white)
 	}
 
 	switch {
 	case g.mode != "":
+		g.labels = g.labels[:0] // the panel covers the HUD and messages
 		g.drawInventory(screen)
 	case w.Over:
 		panel(screen, 30, 66, screenW-60, 32)
-		say(screen, fmt.Sprintf("You died on depth %d. Score %d.", w.Depth, w.Score()), 38, 72, white)
-		say(screen, "Press R to play again.", 38, 72+lineH+2, grey)
+		g.label(fmt.Sprintf("You died on depth %d. Score %d.", w.Depth, w.Score()), 38, 72, white)
+		g.label("Press R to play again.", 38, 72+lineH+2, grey)
+	}
+	// The art, enlarged with hard pixel edges, then the text over it at full resolution.
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Scale(scale, scale)
+	out.DrawImage(screen, op)
+	for _, l := range g.labels {
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(l.x*scale, l.y*scale)
+		op.ColorScale.ScaleWithColor(l.c)
+		text.Draw(out, l.s, font, op)
 	}
 	if *shot != "" && g.tick > 30 { // let a few idle frames pass first
-		saveShot(screen, *shot)
+		saveShot(out, *shot)
 	}
 }
 
@@ -288,9 +307,9 @@ func (g *Game) drawInventory(screen *ebiten.Image) {
 	if g.mode == "drop" {
 		title = "Drop which? (Esc to cancel)"
 	}
-	say(screen, title, 6, 4, yellow)
+	g.label(title, 6, 4, yellow)
 	if len(w.Inventory) == 0 {
-		say(screen, "You carry nothing.", 6, 4+lineH+2, grey)
+		g.label("You carry nothing.", 6, 4+lineH+2, grey)
 	}
 	for i, it := range w.Inventory {
 		y := 4 + float64(i+1)*lineH + 2
@@ -302,7 +321,7 @@ func (g *Game) drawInventory(screen *ebiten.Image) {
 		if it.Worn {
 			label += " (in use)"
 		}
-		say(screen, label, 18, y, white)
+		g.label(label, 18, y, white)
 	}
 }
 
@@ -310,7 +329,7 @@ func (g *Game) drawInventory(screen *ebiten.Image) {
 func wrap(msgs []string, width int) []string {
 	var lines []string
 	for _, m := range msgs {
-		if n := len(lines); n > 0 && text.Advance(lines[n-1]+" "+m, font) <= float64(width) {
+		if n := len(lines); n > 0 && text.Advance(lines[n-1]+" "+m, font)/scale <= float64(width) {
 			lines[n-1] += " " + m
 		} else {
 			lines = append(lines, m)
@@ -319,11 +338,15 @@ func wrap(msgs []string, width int) []string {
 	return lines
 }
 
-func say(dst *ebiten.Image, s string, x, y float64, c color.Color) {
-	op := &text.DrawOptions{}
-	op.GeoM.Translate(x, y)
-	op.ColorScale.ScaleWithColor(c)
-	text.Draw(dst, s, font, op)
+type label struct {
+	s    string
+	x, y float64 // in the art's pixels, like everything else drawn on low
+	c    color.Color
+}
+
+// label queues text for this frame, positioned in the art's pixels.
+func (g *Game) label(s string, x, y float64, c color.Color) {
+	g.labels = append(g.labels, label{s, x, y, c})
 }
 
 func panel(dst *ebiten.Image, x, y, w, h float32) {
@@ -400,7 +423,7 @@ func (g *Game) draw(dst *ebiten.Image, name string, x, y int, alpha float32) {
 	dst.DrawImage(img, op)
 }
 
-func (g *Game) Layout(int, int) (int, int) { return screenW, screenH }
+func (g *Game) Layout(int, int) (int, int) { return screenW * scale, screenH * scale }
 
 func main() {
 	flag.Parse()
