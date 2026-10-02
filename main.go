@@ -36,8 +36,8 @@ const (
 //go:embed assets
 var assets embed.FS
 
-// Tile set per floor, top to bottom: the wall and stairs set, and the floor drawn with it.
-var themes = [floors]struct{ wall, floor string }{
+// Tile sets, one per floor and repeating: the wall and stairs set, and the floor drawn with it.
+var themes = []struct{ wall, floor string }{
 	{"grey", "grey"}, {"dirt", "dirt"}, {"cave", "dark"},
 	{"hedge", "moss"}, {"stone", "grey"}, {"red", "red"},
 	{"frost", "frost"}, {"ice", "cold"}, {"turret", "mud"},
@@ -121,7 +121,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	dst.Clear()
 
 	// Tiles never seen stay black; seen ones out of sight are drawn dim, as remembered.
-	theme := themes[w.Depth-1]
+	theme := themes[(w.Depth-1)%len(themes)]
 	for y, row := range w.Level {
 		for x, c := range row {
 			if !w.Seen[y][x] {
@@ -149,14 +149,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 	}
 	for _, m := range shown {
-		alpha := float32(1)
-		if m.Broken() && g.tick/10%2 == 0 {
-			alpha = 0.4 // blink: ready to possess
-		}
-		g.drawEntity(dst, m, alpha, false)
+		g.drawEntity(dst, m, false)
 	}
-	// A possessed body gets a spark-blue outline, so it stands out from monsters of the same kind.
-	g.drawEntity(dst, w.Player, 1, !w.IsSpark())
+	// The hero gets a blue outline, so it stands out from monsters that look like heroes.
+	g.drawEntity(dst, w.Player, true)
 
 	// Over the sprites: HP bars on hurt monsters, and an alert on those that just spotted the player.
 	for _, m := range shown {
@@ -201,29 +197,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	cy := min(max(w.Player.Y-viewH/2, 0), mapH-viewH)
 	screen.DrawImage(dst.SubImage(image.Rect(cx*tile, cy*tile, (cx+viewW)*tile, (cy+viewH)*tile)).(*ebiten.Image), nil)
 
-	// HUD: the body's hearts, or the spark's remaining turns.
-	if w.IsSpark() {
-		for i := range w.SparkLeft {
-			g.draw(screen, "Character/spark_idle_d_1", i, viewH, 1)
-		}
-	} else {
-		rotsNext := w.decay == w.Player.Decay-1 // the last heart goes at the end of this turn
-		for i := range w.Player.MaxHP {
-			name, alpha := "World/ui_heart", float32(1)
-			if i >= w.Player.HP {
-				name = "World/ui_heart_empty"
-			} else if i == w.Player.HP-1 && rotsNext && g.tick/10%2 == 0 {
-				alpha = 0.3
-			}
-			g.draw(screen, name, i, viewH, alpha)
-		}
-	}
+	// HUD: the hero's HP, a visible boss's HP, and the depth.
+	hpBar(screen, 2, float32(viewH*tile+4), 50, 4, max(w.Player.HP, 0), w.Player.MaxHP)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%d/%d", max(w.Player.HP, 0), w.Player.MaxHP), 56, viewH*tile-3)
 	for _, m := range w.Monsters {
-		if m.Boss && w.Visible[m.Y][m.X] { // health bar between the hearts (up to 10, the orc's) and the depth
+		if m.Boss && w.Visible[m.Y][m.X] {
 			hpBar(screen, float32(10*tile+4), float32(viewH*tile+4), 52, 4, m.HP, m.MaxHP)
 		}
 	}
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Deep %d/%d", w.Depth, floors), screenW-60, viewH*tile-3)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Deep %d", w.Depth), screenW-50, viewH*tile-3)
 
 	// Message line: this step's events, dropping the oldest whole messages when they don't fit.
 	log := w.Log
@@ -231,11 +213,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		log = log[1:]
 	}
 	ebitenutil.DebugPrintAt(screen, strings.Join(log, " "), 2, (viewH+1)*tile)
-	switch {
-	case w.Won:
-		ebitenutil.DebugPrintAt(screen, "You reached the ninth deep. R to play again.", 0, 80)
-	case w.Over:
-		ebitenutil.DebugPrintAt(screen, "The spark fades. R to retry.", 50, 80)
+	if w.Over {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("You died on depth %d. Score %d.", w.Depth, w.Score()), 20, 72)
+		ebitenutil.DebugPrintAt(screen, "R to play again.", 72, 88)
 	}
 	if *shot != "" && g.tick > 30 { // let a few idle frames pass first
 		saveShot(screen, *shot)
@@ -261,7 +241,7 @@ func saveShot(screen *ebiten.Image, path string) {
 	os.Exit(0)
 }
 
-func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, alpha float32, outlined bool) {
+func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, outlined bool) {
 	since := g.tick - g.turnTick
 	anim, frame := e.Anim, since/(animTime/2)%2+1
 	if since >= animTime {
@@ -285,7 +265,7 @@ func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, alpha float32, outlined 
 			colorm.DrawImage(dst, g.sprite(name), cm, op)
 		}
 	}
-	g.draw(dst, name, e.X, e.Y, alpha)
+	g.draw(dst, name, e.X, e.Y, 1)
 }
 
 func (g *Game) sprite(name string) *ebiten.Image {

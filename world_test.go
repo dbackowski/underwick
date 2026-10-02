@@ -7,83 +7,103 @@ import (
 	"testing"
 )
 
-// One run through the core loop: break a rat, possess it, let the body rot, fade as a spark.
-func TestPossessionLoop(t *testing.T) {
+func TestCombat(t *testing.T) {
+	a, d := newEntity(hero, 0, 0), newEntity(kinds['o'], 0, 0)
+	if got := hitChance(a, d); got != 75 { // 70 + 5 * (2 accuracy - 1 armour)
+		t.Fatalf("hero vs orc should hit 75%% of the time, got %d", got)
+	}
+	a.Atk, a.Def, d.Def = 100, 100, 0
+	if hitChance(a, d) != 95 || hitChance(d, a) != 5 {
+		t.Fatal("hit chance should stay between 5% and 95%")
+	}
+
+	// Hitting until the rat dies: every hit deals 1 to the hero's damage, and the kill is counted.
 	w := NewWorld([]string{
-		"#####",
-		"#@r.#",
-		"#####",
+		"####",
+		"#@r#",
+		"####",
 	})
-
-	w.Step(1, 0) // goblin archer hits the adjacent rat for 2: 3 HP -> 1, broken
-	if rat := w.Monsters[0]; rat.HP != 1 || !rat.Broken() {
-		t.Fatalf("rat should be broken at 1 HP, got %+v", rat)
+	rat := w.Monsters[0]
+	rat.MaxHP, rat.HP = 1000, 1000
+	for range 200 {
+		before := rat.HP
+		w.Player.HP = w.Player.MaxHP // keep it alive for the test
+		w.Step(1, 0)
+		if lost := before - rat.HP; lost < 0 || lost > hero.Dmg {
+			t.Fatalf("a hit should deal 1 to %d, dealt %d", hero.Dmg, lost)
+		}
 	}
-
-	w.Step(1, 0) // bump the broken rat: possess it
-	if w.Player.Name != "rat" || w.Player.HP != 3 || len(w.Monsters) != 0 {
-		t.Fatalf("should possess a healed rat, got %+v, monsters %d", w.Player, len(w.Monsters))
+	rat.HP = 1
+	for i := 0; len(w.Monsters) > 0; i++ {
+		if i > 100 {
+			t.Fatal("the hero never lands a hit")
+		}
+		w.Player.HP = w.Player.MaxHP // keep it alive for the test
+		w.Step(1, 0)
 	}
-	if !slices.Contains(w.Log, "You take the rat.") {
-		t.Fatalf("possessing should be logged, got %q", w.Log)
-	}
-
-	w.Player.HP = 1
-	for range w.Player.Decay {
-		w.Step(0, 0)
-	}
-	if !w.IsSpark() || w.SparkLeft != sparkTurns {
-		t.Fatalf("rotted body should eject the spark, got %+v", w.Player)
-	}
-
-	for range sparkTurns {
-		w.Step(0, 0)
-	}
-	if !w.Over {
-		t.Fatal("spark without a body should fade")
+	if w.Kills != 1 || !slices.Contains(w.Log, "The rat dies.") {
+		t.Fatalf("the kill should be counted and logged, got %d kills, log %q", w.Kills, w.Log)
 	}
 }
 
-func TestBodies(t *testing.T) {
-	level := []string{
-		"##########",
-		"#@......o#",
-		"##########",
-	}
-
-	// Archer: range 5, so it walks until the orc is in reach, then shoots.
-	w := NewWorld(level)
-	w.Step(1, 0) // orc is out of range and sight: archer walks
-	if w.Player.X != 2 || len(w.Shots) != 0 {
-		t.Fatalf("archer should walk when nothing is in range, got x=%d shots=%d", w.Player.X, len(w.Shots))
-	}
-	w.Step(1, 0) // orc now at distance 5 after chasing: shoot it
-	orc := w.Monsters[0]
-	if w.Player.X != 2 || len(w.Shots) != 1 || orc.HP != 8 {
-		t.Fatalf("archer should shoot the orc in line, got x=%d shots=%d orc=%+v", w.Player.X, len(w.Shots), orc)
-	}
-
-	// Rat: two moves before the monsters act.
-	w = NewWorld(level)
-	w.Player.Kind = kinds['r']
-	w.Step(1, 0)
-	if orc := w.Monsters[0]; orc.X != 8 {
-		t.Fatalf("monsters should wait for the rat's second move, orc at %d", orc.X)
-	}
-	w.Step(1, 0)
-	if w.Player.X != 3 || w.Monsters[0].X != 7 {
-		t.Fatalf("rat should be at 3 and orc chasing to 7, got rat=%d orc=%d", w.Player.X, w.Monsters[0].X)
-	}
-
-	// Orc: rots twice as fast as the others.
-	w = NewWorld(level)
-	w.Player.Kind = kinds['o']
+func TestRegenAndDeath(t *testing.T) {
+	w := NewWorld([]string{
+		"####",
+		"#@.#",
+		"####",
+	})
 	w.Player.HP = 10
-	for range kinds['a'].Decay / 2 {
+	for range regenEvery {
 		w.Step(0, 0)
 	}
-	if w.Player.HP != 9 {
-		t.Fatalf("orc body should lose 1 HP in half the usual time, got %d", w.Player.HP)
+	if w.Player.HP != 11 {
+		t.Fatalf("the hero should regain 1 HP every %d turns, got %d", regenEvery, w.Player.HP)
+	}
+	w.damage(w.Player, 100)
+	if !w.Over || w.Score() != 100 {
+		t.Fatalf("death should end the run with depth 1 scoring 100, got over=%v score=%d", w.Over, w.Score())
+	}
+}
+
+func TestStairs(t *testing.T) {
+	w := NewWorld([]string{
+		"####",
+		"#@>#",
+		"####",
+	})
+	body := w.Player
+	w.Step(1, 0)
+	if w.Depth != 2 || w.Player != body || w.Level[body.Y][body.X] != '@' {
+		t.Fatalf("stairs should take the hero to the start of floor 2, got depth %d at %d,%d", w.Depth, body.X, body.Y)
+	}
+}
+
+func TestBosses(t *testing.T) {
+	w := NewGame(7)
+	if len(w.bosses) != len(bossKinds) {
+		t.Fatalf("a run should meet all %d bosses in turn, got %q", len(bossKinds), w.bosses)
+	}
+	w.Depth = bossEvery - 1
+	w.descend()
+	var boss *Entity
+	for _, m := range w.Monsters {
+		if m.Boss {
+			boss = m
+		}
+	}
+	if boss == nil || boss.Name != kinds[w.bosses[0]].Name || strings.Contains(strings.Join(w.Level, ""), ">") {
+		t.Fatalf("floor %d should hold the run's first boss and no open stairs", bossEvery)
+	}
+
+	// Killing a boss opens the stairs where it stood.
+	w = NewWorld([]string{
+		"#####",
+		"#@D.#",
+		"#####",
+	})
+	w.damage(w.Monsters[0], 1000)
+	if len(w.Monsters) != 0 || w.Level[1][2] != '>' {
+		t.Fatalf("killing the boss should open the stairs, got %q", w.Level[1])
 	}
 }
 
@@ -91,10 +111,10 @@ func TestBodies(t *testing.T) {
 func TestGenerate(t *testing.T) {
 	for seed := range uint64(200) {
 		rng := rand.New(rand.NewPCG(seed, 0))
-		for depth := 1; depth <= floors; depth++ {
+		for depth := 1; depth <= 2*bossEvery; depth++ {
 			var boss byte
 			stairs := 1
-			if depth%3 == 0 {
+			if depth%bossEvery == 0 {
 				boss, stairs = 'D', 0
 			}
 			level := generate(rng, depth, boss)
@@ -139,31 +159,6 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
-func TestStairs(t *testing.T) {
-	w := NewWorld([]string{
-		"####",
-		"#@>#",
-		"####",
-	})
-	w.rng, w.Depth = rand.New(rand.NewPCG(1, 0)), 1
-	body := w.Player
-	w.Step(1, 0)
-	if w.Depth != 2 || w.Player != body || w.Level[body.Y][body.X] != '@' {
-		t.Fatalf("stairs should take the same body to the start of floor 2, got depth %d at %d,%d", w.Depth, body.X, body.Y)
-	}
-
-	w = NewWorld([]string{
-		"####",
-		"#@>#",
-		"####",
-	})
-	w.Depth = floors
-	w.Step(1, 0)
-	if !w.Over || !w.Won {
-		t.Fatal("stairs on the last floor should win the run")
-	}
-}
-
 func TestSightAndPaths(t *testing.T) {
 	// An orc behind a wall doesn't notice the player, though it is well within range.
 	w := NewWorld([]string{
@@ -189,96 +184,6 @@ func TestSightAndPaths(t *testing.T) {
 	w.Step(0, 0)
 	if orc.X != 2 || orc.Y != 3 {
 		t.Fatalf("orc should head right, around the wall, got %d,%d", orc.X, orc.Y)
-	}
-}
-
-func TestBurstAndCrumble(t *testing.T) {
-	// A body killed in melee breaks its killer, which the spark can take right away.
-	w := NewWorld([]string{
-		"#####",
-		"#@o.#",
-		"#####",
-	})
-	w.Player.HP = 1
-	w.Step(0, 0) // the orc kills the archer
-	orc := w.Monsters[0]
-	if !w.IsSpark() || !orc.Broken() {
-		t.Fatalf("spark should tear free and break the orc, got player %+v orc %+v", w.Player, orc)
-	}
-	w.Step(1, 0)
-	if w.Player != orc {
-		t.Fatalf("spark should possess the broken orc, got %+v", w.Player)
-	}
-
-	// A broken monster nobody takes falls apart.
-	w = NewWorld([]string{
-		"#######",
-		"#@...r#",
-		"#######",
-	})
-	w.Monsters[0].HP = 1
-	for range crumble + 1 {
-		w.Step(0, 0)
-	}
-	if len(w.Monsters) != 0 {
-		t.Fatalf("broken rat should crumble after %d turns", crumble)
-	}
-}
-
-func TestBosses(t *testing.T) {
-	w := NewGame(7)
-	if len(w.bosses) != 3 || w.bosses[0] == w.bosses[1] || w.bosses[1] == w.bosses[2] || w.bosses[0] == w.bosses[2] {
-		t.Fatalf("a run should face 3 different bosses, got %q", w.bosses)
-	}
-
-	// A boss is never broken, even at 1 HP, and killing it opens the stairs where it stood.
-	w = NewWorld([]string{
-		"#####",
-		"#@D.#",
-		"#####",
-	})
-	dragon := w.Monsters[0]
-	dragon.HP = 1
-	if dragon.Broken() {
-		t.Fatal("a boss should never be broken")
-	}
-	w.Step(1, 0)
-	if len(w.Monsters) != 0 || w.Level[1][2] != '>' {
-		t.Fatalf("killing the boss should open the stairs, got %q", w.Level[1])
-	}
-
-	// The spark's burst can't break a boss, so it scorches it for a quarter of its HP.
-	w = NewWorld([]string{
-		"#####",
-		"#@C.#",
-		"#####",
-	})
-	w.Player.HP = 1
-	w.Step(0, 0) // the cyclops kills the archer
-	if cyclops := w.Monsters[0]; !w.IsSpark() || cyclops.Broken() || cyclops.HP != cyclops.MaxHP-cyclops.MaxHP/4 {
-		t.Fatalf("burst should scorch the boss for a quarter of its HP, got %+v", cyclops)
-	}
-}
-
-func TestSparkHaunts(t *testing.T) {
-	for _, c := range "rao" {
-		w := NewWorld([]string{
-			"#####",
-			"#@" + string(c) + ".#",
-			"#####",
-		})
-		w.Player = newEntity(spark, 1, 1)
-		w.SparkLeft = sparkTurns
-		body := w.Monsters[0]
-		w.Step(1, 0)
-		w.Step(1, 0) // two touches: one full turn, as the spark moves twice
-		if !body.Broken() {
-			t.Fatalf("%s should be broken after two touches, got %d/%d HP", body.Name, body.HP, body.MaxHP)
-		}
-		w.Step(1, 0)
-		if w.Player != body {
-			t.Fatalf("spark should take the %s it broke", body.Name)
-		}
 	}
 }
 

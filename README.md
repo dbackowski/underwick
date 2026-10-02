@@ -1,6 +1,7 @@
 # Underwick
 
-Turn-based roguelike built with Go and [Ebitengine](https://ebitengine.org).
+A classic turn-based roguelike built with Go and [Ebitengine](https://ebitengine.org). Go down into the
+dungeon below Underwick as far as you can. Death is permanent, and the dungeon has no bottom.
 
 ## Setup
 
@@ -12,27 +13,26 @@ The sprites are from Oryx Design Lab's [8-Bit Remaster](https://www.oryxdesignla
 
     go run .
 
-Arrow keys or WASD move and attack, space waits a turn, R restarts after death.
+Arrow keys or WASD move and attack, space waits a turn, R starts a new run after death.
 
-You are a spark in a borrowed body (outlined in blue). The body rots 1 HP every few turns.
-Beat a monster down to a third of its HP (it blinks) and walk into it to take it over.
-If your body dies the spark tears free, breaking every monster next to it, and moves twice per turn.
-You have 3 turns to take a new body. A bare spark haunts: touching a monster drains a third of its HP, so two touches break it. A broken monster that nobody takes falls apart after 6 turns.
+Walk into a monster to attack it. A hit lands 70% of the time, plus 5% for each point of your accuracy over
+its armour, and deals 1 up to your weapon's damage. You regain 1 HP every 8 turns.
 
 Monsters within 6 tiles notice you only if they can see you, then hunt you down to where they last saw you.
+Goblin archers shoot along straight lines; rats move twice per turn.
 
-Each floor is generated, 40x30 tiles, and you only see what your body can see: explored parts stay on the map, dimmed.
-Take the stairs down to reach the next one; the ninth is the bottom.
+Each floor is generated, 40x30 tiles, and you only see what you can see: explored parts stay on the map,
+dimmed. Take the stairs down to reach the next floor. Every 5th floor a boss guards the stairs, which open
+when it dies: dragon, beholder, lord, cyclops, demon or reaper, stronger each time round.
 
-Floors 3, 6 and 9 each hold a boss, three of six per run: dragon, beholder, lord, cyclops, demon or reaper.
-Its stairs stay sealed until it dies. A boss can't be broken or possessed, but every body that dies next
-to it scorches it for a quarter of its HP, and it keeps three minions close to take over mid-fight.
+Your score is 100 per floor reached plus 10 per kill.
 
-Bodies: the goblin archer shoots anything in a straight line up to 5 tiles away, the rat moves twice per turn, and the orc hits hard but rots twice as fast.
+## Development
 
 `go run . -shot frame.png` saves one rendered frame and exits, for checking rendering.
 
-`UNDERWICK_SIM=1 go test -run Balance -v` plays 300 seeded runs with three bots and prints win rates, for tuning. The bots see the whole floor.
+`UNDERWICK_SIM=1 go test -run Balance -v` plays 300 seeded runs with two bots and prints how deep they got,
+for tuning. The bots see the whole floor.
 
 ## Credits
 

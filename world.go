@@ -6,45 +6,46 @@ import (
 	"slices"
 )
 
-// Tuning knobs shared by all bodies. Per-body ones live in kinds.
+// Tuning knobs. Per-creature ones live in kinds.
 const (
-	sparkTurns = 3 // turns a bare spark survives without a body
 	sight      = 6 // how far (in steps) monsters notice the player
-	crumble    = 6 // turns a broken monster lasts before it falls apart, if nobody possesses it
 	viewRadius = 7 // how far the player sees, in tiles
+	regenEvery = 8 // turns for the hero to regain 1 HP
+	bossEvery  = 5 // floors between bosses
 )
 
-// Kind is a body type. Name doubles as the sprite prefix.
+// Kind is a creature type. Name doubles as the sprite prefix.
 type Kind struct {
 	Name  string
 	MaxHP int
-	Dmg   int
+	Atk   int // accuracy: each point is +5% to hit
+	Def   int // armour: each point is -5% to be hit
+	Dmg   int // a hit deals 1 to Dmg
 	Moves int // actions per turn
 	Range int // attack reach along a straight line: 1 is melee, more shoots Missile
-	Decay int // a possessed body loses 1 HP every this many turns
 
 	Missile string // FX sprite of what a ranged attack fires; "arrow" picks arrow_x or arrow_y
-	Boss    bool   // never broken or possessed; killing it opens the stairs
+	Boss    bool   // guards a floor's stairs, which open when it dies
 }
 
-// kinds maps a level character to a body type.
-var kinds = map[byte]Kind{
-	'r': {Name: "rat", MaxHP: 3, Dmg: 1, Moves: 2, Range: 1, Decay: 8},                         // fast and fragile
-	'a': {Name: "gobarcher", MaxHP: 5, Dmg: 2, Moves: 1, Range: 5, Decay: 8, Missile: "arrow"}, // shoots down a line
-	'o': {Name: "orc", MaxHP: 10, Dmg: 3, Moves: 1, Range: 1, Decay: 4},                        // strong, rots twice as fast
+var hero = Kind{Name: "warrior", MaxHP: 20, Atk: 2, Def: 1, Dmg: 6, Moves: 1, Range: 1}
 
-	// Bosses, one per act. Their HP grows on deeper floors, see descend.
-	'D': {Name: "dragon", MaxHP: 8, Dmg: 3, Moves: 1, Range: 4, Missile: "proj_red_ball", Boss: true},    // breathes fire
-	'E': {Name: "beholder", MaxHP: 6, Dmg: 2, Moves: 1, Range: 6, Missile: "proj_blue_ball", Boss: true}, // long-range eye beam
-	'L': {Name: "lord", MaxHP: 7, Dmg: 3, Moves: 1, Range: 5, Missile: "proj_green_ball", Boss: true},    // dark magic
-	'C': {Name: "cyclops", MaxHP: 10, Dmg: 4, Moves: 1, Range: 1, Boss: true},                            // a wall of HP
-	'X': {Name: "demon", MaxHP: 7, Dmg: 2, Moves: 2, Range: 1, Boss: true},                               // fast
-	'R': {Name: "reaper", MaxHP: 5, Dmg: 5, Moves: 1, Range: 1, Boss: true},                              // fragile, hits hardest
+// kinds maps a level character to a monster type.
+var kinds = map[byte]Kind{
+	'r': {Name: "rat", MaxHP: 4, Dmg: 2, Moves: 2, Range: 1},                                 // fast and fragile
+	'a': {Name: "gobarcher", MaxHP: 6, Atk: 1, Dmg: 3, Moves: 1, Range: 5, Missile: "arrow"}, // shoots down a line
+	'o': {Name: "orc", MaxHP: 12, Atk: 2, Def: 1, Dmg: 5, Moves: 1, Range: 1},                // strong
+
+	// Bosses, one every bossEvery floors. They grow stronger each time round, see descend.
+	'D': {Name: "dragon", MaxHP: 30, Atk: 3, Def: 2, Dmg: 6, Moves: 1, Range: 4, Missile: "proj_red_ball", Boss: true},    // breathes fire
+	'E': {Name: "beholder", MaxHP: 22, Atk: 3, Def: 1, Dmg: 5, Moves: 1, Range: 6, Missile: "proj_blue_ball", Boss: true}, // long-range eye beam
+	'L': {Name: "lord", MaxHP: 26, Atk: 3, Def: 2, Dmg: 6, Moves: 1, Range: 5, Missile: "proj_green_ball", Boss: true},    // dark magic
+	'C': {Name: "cyclops", MaxHP: 40, Atk: 2, Def: 2, Dmg: 8, Moves: 1, Range: 1, Boss: true},                             // a wall of HP
+	'X': {Name: "demon", MaxHP: 28, Atk: 3, Def: 1, Dmg: 5, Moves: 2, Range: 1, Boss: true},                               // fast
+	'R': {Name: "reaper", MaxHP: 20, Atk: 4, Def: 1, Dmg: 10, Moves: 1, Range: 1, Boss: true},                             // fragile, hits hardest
 }
 
 const bossKinds = "DELCXR"
-
-var spark = Kind{Name: "spark", MaxHP: 1, Moves: 2} // quick, to reach a body in time
 
 type Entity struct {
 	Kind
@@ -55,18 +56,14 @@ type Entity struct {
 
 	Spotted bool // a monster that noticed the player this step, for the alert icon
 
-	// Monsters only: where the player was last seen, while hunting it, and turns spent broken.
+	// Monsters only: where the player was last seen, while hunting it.
 	hunting      bool
 	goalX, goalY int
-	brokenFor    int
 }
 
 func newEntity(k Kind, x, y int) *Entity {
 	return &Entity{Kind: k, X: x, Y: y, HP: k.MaxHP, Dir: "d", Anim: "idle"}
 }
-
-// Broken bodies can be possessed and are too hurt to act. Bosses fight to the death instead.
-func (e *Entity) Broken() bool { return !e.Boss && e.HP > 0 && e.HP*3 <= e.MaxHP }
 
 // Shot is a missile fired this step, kept for the renderer.
 // It points at the target itself, which may have moved or died by the time the missile is drawn.
@@ -77,30 +74,28 @@ type Shot struct {
 }
 
 type World struct {
-	Level     []string
-	Player    *Entity // a spark, or the body it possesses
-	Monsters  []*Entity
-	Shots     []Shot
-	Log       []string // what happened this step, in order, for the message line
-	Visible   [][]bool // tiles the player sees right now, by [y][x]
-	Seen      [][]bool // tiles the player has ever seen on this floor
-	SparkLeft int      // turns left to find a body while the player is a bare spark
-	Depth     int      // current floor, 1 to floors
-	Over      bool
-	Won       bool // took the stairs down from the last floor
-	rng       *rand.Rand
-	bosses    string // this run's boss for floors 3, 6 and 9, as kind characters
-	decay     int    // turns since the current body last decayed
-	acted     int    // player actions taken so far this turn
+	Level    []string
+	Player   *Entity
+	Monsters []*Entity
+	Shots    []Shot
+	Log      []string // what happened this step, in order, for the message line
+	Visible  [][]bool // tiles the player sees right now, by [y][x]
+	Seen     [][]bool // tiles the player has ever seen on this floor
+	Depth    int      // current floor, from 1 down without end
+	Kills    int
+	Over     bool // the hero is dead
+	rng      *rand.Rand
+	bosses   string // the order this run meets the bosses in, as kind characters
+	regen    int    // turns since the hero last regained HP
 }
 
-// NewWorld parses a level: '#' wall, '@' player (in a goblin archer body), kind letters for monsters.
+// NewWorld parses a level: '#' wall, '>' stairs down, '@' the hero, kind letters for monsters.
 func NewWorld(level []string) *World {
-	w := &World{Level: level}
+	w := &World{Level: level, Depth: 1, rng: rand.New(rand.NewPCG(1, 0))}
 	for y, row := range level {
 		for x := range row {
 			if row[x] == '@' {
-				w.Player = newEntity(kinds['a'], x, y)
+				w.Player = newEntity(hero, x, y)
 			} else if k, ok := kinds[row[x]]; ok {
 				w.Monsters = append(w.Monsters, newEntity(k, x, y))
 			}
@@ -150,38 +145,38 @@ func (w *World) updateFOV() {
 	}
 }
 
-// NewGame starts a run on a generated first floor. The same seed always builds the same floors.
+// NewGame starts a run on a generated first floor. The same seed always plays out the same way.
 func NewGame(seed uint64) *World {
 	rng := rand.New(rand.NewPCG(seed, 0))
 	w := NewWorld(generate(rng, 1, 0))
-	w.rng, w.Depth = rng, 1
-	for _, i := range rng.Perm(len(bossKinds))[:floors/3] {
+	w.rng = rng
+	for _, i := range rng.Perm(len(bossKinds)) {
 		w.bosses += bossKinds[i : i+1]
 	}
 	return w
 }
 
-// descend moves the player, in whatever body it has, to the start of a freshly generated next floor.
+// Score counts how deep the hero got and how much it killed on the way.
+func (w *World) Score() int { return 100*w.Depth + 10*w.Kills }
+
+// descend moves the hero to the start of a freshly generated next floor.
 func (w *World) descend() {
-	if w.Depth == floors {
-		w.Over, w.Won = true, true
-		return
-	}
 	w.Depth++
 	var boss byte
-	if w.Depth%3 == 0 && len(w.bosses) >= w.Depth/3 {
-		boss = w.bosses[w.Depth/3-1]
+	round := w.Depth / bossEvery // how many bosses this one is, counting from 1
+	if w.Depth%bossEvery == 0 && len(w.bosses) > 0 {
+		boss = w.bosses[(round-1)%len(w.bosses)]
 	}
 	next := NewWorld(generate(w.rng, w.Depth, boss))
 	w.Player.X, w.Player.Y = next.Player.X, next.Player.Y
 	w.Level, w.Monsters, w.Seen = next.Level, next.Monsters, next.Seen
 	defer w.updateFOV()
-	w.acted = 0
 	w.say("Deep %d.", w.Depth)
 	for _, m := range w.Monsters {
-		if m.Boss { // 1x on floor 3, 1.5x on floor 6, 2x on floor 9
-			m.MaxHP += m.MaxHP * (w.Depth/3 - 1) / 2
+		if m.Boss { // each boss after the first gets half its base HP and 1 damage more
+			m.MaxHP += m.MaxHP * (round - 1) / 2
 			m.HP = m.MaxHP
+			m.Dmg += round - 1
 			w.say("A %s guards the stairs.", m.Name)
 		}
 	}
@@ -189,10 +184,7 @@ func (w *World) descend() {
 
 func (w *World) say(format string, args ...any) { w.Log = append(w.Log, fmt.Sprintf(format, args...)) }
 
-func (w *World) IsSpark() bool { return w.Player.Name == "spark" }
-
-// Step is one player action (dx, dy of 0, 0 waits out the rest of the turn).
-// The turn ends, and monsters act, once the body has used all its moves.
+// Step is one turn: the hero acts (dx, dy of 0, 0 waits), then every monster.
 func (w *World) Step(dx, dy int) {
 	if w.Over {
 		return
@@ -204,48 +196,23 @@ func (w *World) Step(dx, dy int) {
 		m.Anim, m.Spotted = "idle", false
 	}
 
-	body := w.Player
-	waited := dx == 0 && dy == 0
-	if !waited {
+	if dx != 0 || dy != 0 {
 		w.playerAct(dx, dy)
 		if w.Level[w.Player.Y][w.Player.X] == '>' {
 			w.descend()
 			return
 		}
 	}
-	if w.acted++; !waited && w.acted < w.Player.Moves {
-		return
-	}
-	w.acted = 0
-
-	if w.IsSpark() {
-		w.SparkLeft--
-		if w.SparkLeft <= 0 {
-			w.Over = true
-			return
-		}
-	} else if w.Player == body { // a body possessed this turn starts decaying next turn
-		if w.decay++; w.decay >= w.Player.Decay {
-			w.decay = 0
-			w.say("Your %s rots.", w.Player.Name)
-			w.damage(w.Player, 1)
+	if w.Player.HP < w.Player.MaxHP {
+		if w.regen++; w.regen >= regenEvery {
+			w.regen = 0
+			w.Player.HP++
 		}
 	}
-
-	w.Monsters = slices.DeleteFunc(w.Monsters, func(m *Entity) bool {
-		if m.Broken() {
-			m.brokenFor++
-		}
-		if m.brokenFor > crumble {
-			w.say("The %s crumbles.", m.Name)
-			return true
-		}
-		return false
-	})
-	// A copy, since a monster can die mid-turn (a boss caught in the spark's burst).
+	// A copy, since monsters can die mid-turn.
 	for _, m := range slices.Clone(w.Monsters) {
 		for range m.Moves {
-			if m.HP > 0 {
+			if m.HP > 0 && !w.Over {
 				w.act(m)
 			}
 		}
@@ -255,37 +222,20 @@ func (w *World) Step(dx, dy int) {
 func (w *World) playerAct(dx, dy int) {
 	p := w.Player
 	p.Dir = dirName(dx, dy)
-	if t := w.firstInLine(p, dx, dy, p.Range); t != nil && !t.Broken() {
+	if t := w.firstInLine(p, dx, dy, p.Range); t != nil {
 		w.attack(p, t)
 		return
 	}
-	tx, ty := p.X+dx, p.Y+dy
-	m := w.monsterAt(tx, ty)
-	switch {
-	case m != nil && m.Broken():
-		w.possess(m)
-	case m != nil && w.IsSpark() && !m.Boss:
-		// A bare spark haunts: each touch drains a third of the body's HP (never killing it), so two
-		// touches break anything and the spark can make its own body.
-		m.HP = max(1, m.HP-(m.MaxHP+2)/3)
-		p.Anim = "atk"
-		w.say("You haunt the %s.", m.Name)
-		if m.Broken() {
-			w.say("It breaks.")
-		}
-	case w.free(tx, ty):
+	if tx, ty := p.X+dx, p.Y+dy; w.free(tx, ty) {
 		p.X, p.Y, p.Anim = tx, ty, "walk"
 	}
 }
 
 func (w *World) act(m *Entity) {
-	if m.Broken() {
-		return
-	}
 	p := w.Player
 	dx, dy := p.X-m.X, p.Y-m.Y
 	dist := abs(dx) + abs(dy)
-	if !w.IsSpark() && (dx == 0 || dy == 0) && w.firstInLine(m, sign(dx), sign(dy), m.Range) == p {
+	if (dx == 0 || dy == 0) && w.firstInLine(m, sign(dx), sign(dy), m.Range) == p {
 		m.Dir = dirName(dx, dy)
 		w.attack(m, p)
 		return
@@ -371,44 +321,42 @@ func (w *World) firstInLine(from *Entity, dx, dy, n int) *Entity {
 	return nil
 }
 
-func (w *World) attack(attacker, target *Entity) {
-	attacker.Anim = "atk"
-	if abs(target.X-attacker.X)+abs(target.Y-attacker.Y) > 1 {
-		w.Shots = append(w.Shots, Shot{attacker.X, attacker.Y, target, attacker.Missile})
+// hitChance is the percent chance that a's attack lands on t: 70%, plus 5% per point of accuracy
+// over the target's armour, never certain either way.
+func hitChance(a, t *Entity) int { return min(max(70+5*(a.Atk-t.Def), 5), 95) }
+
+func (w *World) attack(a, t *Entity) {
+	a.Anim = "atk"
+	if abs(t.X-a.X)+abs(t.Y-a.Y) > 1 {
+		w.Shots = append(w.Shots, Shot{a.X, a.Y, t, a.Missile})
 	}
-	w.damage(target, attacker.Dmg)
+	if w.rng.IntN(100) >= hitChance(a, t) {
+		if a == w.Player {
+			w.say("You miss the %s.", t.Name)
+		} else {
+			w.say("The %s misses.", a.Name)
+		}
+		return
+	}
+	if a == w.Player {
+		w.say("You hit the %s.", t.Name)
+	} else {
+		w.say("The %s hits.", a.Name)
+	}
+	w.damage(t, 1+w.rng.IntN(a.Dmg))
 }
 
 func (w *World) damage(e *Entity, n int) {
-	wasBroken := e.Broken()
 	e.HP -= n
 	if e.HP > 0 {
-		if e != w.Player && e.Broken() && !wasBroken {
-			w.say("The %s breaks.", e.Name)
-		}
 		return
 	}
 	if e == w.Player {
-		// The body dies and the spark tears free onto the same tile, breaking every monster next to it,
-		// so a spark killed in melee always has a body in reach.
-		// A boss can't be broken, so the burst scorches it for a quarter of its HP instead: bodies spent
-		// next to a boss are how the spark wears it down.
-		for _, m := range slices.Clone(w.Monsters) { // a copy, since the burst can kill the boss
-			switch {
-			case abs(m.X-e.X)+abs(m.Y-e.Y) != 1:
-			case m.Boss:
-				w.say("The burst scorches the %s.", m.Name)
-				w.damage(m, m.MaxHP/4)
-			default:
-				m.HP = min(m.HP, max(1, m.MaxHP/3))
-			}
-		}
-		w.say("Your %s dies. The spark tears free!", e.Name)
-		w.Player = newEntity(spark, e.X, e.Y)
-		w.Player.Dir = e.Dir
-		w.SparkLeft = sparkTurns
+		w.Over = true
+		w.say("You die.")
 		return
 	}
+	w.Kills++
 	if e.Boss { // the sealed stairs open where it fell
 		w.Level[e.Y] = w.Level[e.Y][:e.X] + ">" + w.Level[e.Y][e.X+1:]
 		w.say("The %s falls. The stairs open!", e.Name)
@@ -416,15 +364,6 @@ func (w *World) damage(e *Entity, n int) {
 		w.say("The %s dies.", e.Name)
 	}
 	w.Monsters = slices.DeleteFunc(w.Monsters, func(m *Entity) bool { return m == e })
-}
-
-// possess moves the spark into m, restoring the body to full HP. Any previous body is left behind to rot.
-func (w *World) possess(m *Entity) {
-	w.Monsters = slices.DeleteFunc(w.Monsters, func(e *Entity) bool { return e == m })
-	m.HP, m.Dir, m.Anim, m.brokenFor = m.MaxHP, w.Player.Dir, "idle", 0
-	w.Player = m
-	w.decay = 0
-	w.say("You take the %s.", m.Name)
 }
 
 func (w *World) monsterAt(x, y int) *Entity {
