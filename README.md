@@ -19,13 +19,18 @@ Walk into a monster to attack it. A hit lands 70% of the time, plus 5% for each 
 its armour, and deals 1 up to your weapon's damage. You regain 1 HP every 8 turns.
 
 Monsters within 6 tiles notice you only if they can see you, then hunt you down to where they last saw you.
-Goblin archers shoot along straight lines; rats move twice per turn.
+Twenty kinds live at different depths, from rats and bats on floor 1 to flayers and demons below floor 12;
+each floor holds those that first appear there or up to 6 floors above. Some are fast, some shoot along
+straight lines, and every 4 floors below their first appearance they grow a little stronger.
+
+Kills give experience. Each level needs 10 more than the last and gives 5 max HP and 1 accuracy, plus
+1 damage every 2nd level and 1 armour every 3rd.
 
 Each floor is generated, 40x30 tiles, and you only see what you can see: explored parts stay on the map,
 dimmed. Take the stairs down to reach the next floor. Every 5th floor a boss guards the stairs, which open
 when it dies: dragon, beholder, lord, cyclops, demon or reaper, stronger each time round.
 
-Your score is 100 per floor reached plus 10 per kill.
+Your score is 100 per floor reached, 10 per kill and 50 per level gained.
 
 ## Development
 

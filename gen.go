@@ -92,8 +92,8 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 			}
 		}
 		rng.Shuffle(len(spots), func(i, j int) { spots[i], spots[j] = spots[j], spots[i] })
-		// ponytail: flat difficulty curve, more monsters and more orcs per floor; tune once the game is played
-		pool := "rrraa" + strings.Repeat("o", min(depth/2, 6))
+		// ponytail: the count grows straight to 20 a floor; tune once the game is played
+		pool := spawnable(depth)
 		n := min(4+2*depth, 20, len(spots))
 		if boss != 0 {
 			// Minions stand closest to the boss, so a body dying in the fight has others in reach.

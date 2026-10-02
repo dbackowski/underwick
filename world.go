@@ -23,6 +23,8 @@ type Kind struct {
 	Dmg   int // a hit deals 1 to Dmg
 	Moves int // actions per turn
 	Range int // attack reach along a straight line: 1 is melee, more shoots Missile
+	Depth int // the shallowest floor it appears on
+	XP    int // experience the hero gains for killing it
 
 	Missile string // FX sprite of what a ranged attack fires; "arrow" picks arrow_x or arrow_y
 	Boss    bool   // guards a floor's stairs, which open when it dies
@@ -31,21 +33,69 @@ type Kind struct {
 var hero = Kind{Name: "warrior", MaxHP: 20, Atk: 2, Def: 1, Dmg: 6, Moves: 1, Range: 1}
 
 // kinds maps a level character to a monster type.
+// kinds maps a level character to a monster type.
 var kinds = map[byte]Kind{
-	'r': {Name: "rat", MaxHP: 4, Dmg: 2, Moves: 2, Range: 1},                                 // fast and fragile
-	'a': {Name: "gobarcher", MaxHP: 6, Atk: 1, Dmg: 3, Moves: 1, Range: 5, Missile: "arrow"}, // shoots down a line
-	'o': {Name: "orc", MaxHP: 12, Atk: 2, Def: 1, Dmg: 5, Moves: 1, Range: 1},                // strong
+	'r': {Name: "rat", Depth: 1, XP: 2, MaxHP: 4, Dmg: 2, Moves: 2, Range: 1},                 // fast and fragile
+	'b': {Name: "bat", Depth: 1, XP: 2, MaxHP: 3, Atk: 1, Def: 2, Dmg: 2, Moves: 2, Range: 1}, // fast, hard to hit
+	's': {Name: "snake", Depth: 1, XP: 3, MaxHP: 6, Atk: 1, Dmg: 3, Moves: 1, Range: 1},
+	'j': {Name: "slime", Depth: 2, XP: 3, MaxHP: 10, Dmg: 2, Moves: 1, Range: 1},                              // soaks up hits
+	'g': {Name: "gobwar", Depth: 2, XP: 5, MaxHP: 8, Atk: 1, Def: 1, Dmg: 4, Moves: 1, Range: 1},              // goblin warrior
+	'a': {Name: "gobarcher", Depth: 2, XP: 5, MaxHP: 6, Atk: 1, Dmg: 3, Moves: 1, Range: 5, Missile: "arrow"}, // shoots down a line
+	'w': {Name: "wolf", Depth: 3, XP: 7, MaxHP: 8, Atk: 2, Dmg: 4, Moves: 2, Range: 1},                        // fast
+	'k': {Name: "skel", Depth: 4, XP: 8, MaxHP: 12, Atk: 2, Def: 2, Dmg: 5, Moves: 1, Range: 1},               // skeleton
+	'p': {Name: "spider", Depth: 4, XP: 8, MaxHP: 10, Atk: 3, Def: 1, Dmg: 4, Moves: 1, Range: 1},
+	'z': {Name: "zombie", Depth: 5, XP: 9, MaxHP: 20, Atk: 1, Dmg: 6, Moves: 1, Range: 1},       // slow to kill
+	'o': {Name: "orc", Depth: 5, XP: 10, MaxHP: 14, Atk: 3, Def: 2, Dmg: 6, Moves: 1, Range: 1}, // strong
+	'n': {Name: "gnoll", Depth: 6, XP: 12, MaxHP: 16, Atk: 3, Def: 1, Dmg: 7, Moves: 1, Range: 1},
+	'h': {Name: "skelarcher", Depth: 6, XP: 12, MaxHP: 12, Atk: 3, Def: 1, Dmg: 5, Moves: 1, Range: 6, Missile: "arrow"}, // skeleton archer
+	'i': {Name: "imp", Depth: 7, XP: 14, MaxHP: 12, Atk: 4, Def: 2, Dmg: 5, Moves: 2, Range: 1},                          // fast
+	'y': {Name: "ghost", Depth: 8, XP: 16, MaxHP: 16, Atk: 4, Def: 4, Dmg: 6, Moves: 1, Range: 1},                        // hard to hit
+	'v': {Name: "skelwar", Depth: 9, XP: 18, MaxHP: 24, Atk: 4, Def: 3, Dmg: 8, Moves: 1, Range: 1},                      // skeleton warrior
+	'm': {Name: "skelmage", Depth: 10, XP: 20, MaxHP: 16, Atk: 4, Def: 2, Dmg: 8, Moves: 1, Range: 5, Missile: "proj_blue_ball"},
+	'f': {Name: "flame", Depth: 11, XP: 22, MaxHP: 20, Atk: 5, Def: 2, Dmg: 9, Moves: 1, Range: 3, Missile: "proj_orange_ball"}, // spits fire
+	'l': {Name: "flayer", Depth: 12, XP: 26, MaxHP: 30, Atk: 5, Def: 3, Dmg: 10, Moves: 1, Range: 1},
+	'x': {Name: "demon", Depth: 13, XP: 30, MaxHP: 34, Atk: 6, Def: 3, Dmg: 12, Moves: 1, Range: 1}, // lesser demon
 
 	// Bosses, one every bossEvery floors. They grow stronger each time round, see descend.
-	'D': {Name: "dragon", MaxHP: 30, Atk: 3, Def: 2, Dmg: 6, Moves: 1, Range: 4, Missile: "proj_red_ball", Boss: true},    // breathes fire
-	'E': {Name: "beholder", MaxHP: 22, Atk: 3, Def: 1, Dmg: 5, Moves: 1, Range: 6, Missile: "proj_blue_ball", Boss: true}, // long-range eye beam
-	'L': {Name: "lord", MaxHP: 26, Atk: 3, Def: 2, Dmg: 6, Moves: 1, Range: 5, Missile: "proj_green_ball", Boss: true},    // dark magic
-	'C': {Name: "cyclops", MaxHP: 40, Atk: 2, Def: 2, Dmg: 8, Moves: 1, Range: 1, Boss: true},                             // a wall of HP
-	'X': {Name: "demon", MaxHP: 28, Atk: 3, Def: 1, Dmg: 5, Moves: 2, Range: 1, Boss: true},                               // fast
-	'R': {Name: "reaper", MaxHP: 20, Atk: 4, Def: 1, Dmg: 10, Moves: 1, Range: 1, Boss: true},                             // fragile, hits hardest
+	'D': {Name: "dragon", MaxHP: 18, Atk: 3, Def: 2, Dmg: 6, Moves: 1, Range: 4, Missile: "proj_red_ball", Boss: true},    // breathes fire
+	'E': {Name: "beholder", MaxHP: 13, Atk: 3, Def: 1, Dmg: 5, Moves: 1, Range: 6, Missile: "proj_blue_ball", Boss: true}, // long-range eye beam
+	'L': {Name: "lord", MaxHP: 16, Atk: 3, Def: 2, Dmg: 6, Moves: 1, Range: 5, Missile: "proj_green_ball", Boss: true},    // dark magic
+	'C': {Name: "cyclops", MaxHP: 24, Atk: 2, Def: 2, Dmg: 8, Moves: 1, Range: 1, Boss: true},                             // a wall of HP
+	'X': {Name: "demon", MaxHP: 17, Atk: 3, Def: 1, Dmg: 5, Moves: 2, Range: 1, Boss: true},                               // fast
+	'R': {Name: "reaper", MaxHP: 12, Atk: 4, Def: 1, Dmg: 10, Moves: 1, Range: 1, Boss: true},                             // fragile, hits hardest
 }
 
 const bossKinds = "DELCXR"
+
+// spawnable lists the monsters that live on a floor: those that first appear there or up to 6 floors
+// above. Below the deepest first appearance the window stops sinking, so the deep keeps a mix.
+func spawnable(depth int) []byte {
+	deepest := 0
+	for _, k := range kinds {
+		if !k.Boss {
+			deepest = max(deepest, k.Depth)
+		}
+	}
+	var cs []byte
+	for c, k := range kinds {
+		if !k.Boss && k.Depth <= depth && k.Depth >= min(depth, deepest)-6 {
+			cs = append(cs, c)
+		}
+	}
+	slices.Sort(cs) // map order is random; the same seed must build the same floor
+	return cs
+}
+
+// at returns k as met on a floor: every 4 floors below where it first appears it gains a quarter of
+// its HP, 1 accuracy and 1 damage, and is worth more experience.
+func (k Kind) at(depth int) Kind {
+	b := max(0, depth-k.Depth) / 4
+	k.MaxHP += k.MaxHP * b / 4
+	k.Atk += b
+	k.Dmg += b
+	k.XP += k.XP * b / 2
+	return k
+}
 
 type Entity struct {
 	Kind
@@ -83,6 +133,8 @@ type World struct {
 	Seen     [][]bool // tiles the player has ever seen on this floor
 	Depth    int      // current floor, from 1 down without end
 	Kills    int
+	ExpLevel int  // the hero's experience level, from 1
+	XP       int  // experience toward the next level
 	Over     bool // the hero is dead
 	rng      *rand.Rand
 	bosses   string // the order this run meets the bosses in, as kind characters
@@ -91,7 +143,7 @@ type World struct {
 
 // NewWorld parses a level: '#' wall, '>' stairs down, '@' the hero, kind letters for monsters.
 func NewWorld(level []string) *World {
-	w := &World{Level: level, Depth: 1, rng: rand.New(rand.NewPCG(1, 0))}
+	w := &World{Level: level, Depth: 1, ExpLevel: 1, rng: rand.New(rand.NewPCG(1, 0))}
 	for y, row := range level {
 		for x := range row {
 			if row[x] == '@' {
@@ -156,8 +208,32 @@ func NewGame(seed uint64) *World {
 	return w
 }
 
-// Score counts how deep the hero got and how much it killed on the way.
-func (w *World) Score() int { return 100*w.Depth + 10*w.Kills }
+// Score counts how deep the hero got, how much it killed and the level it reached.
+func (w *World) Score() int { return 100*w.Depth + 10*w.Kills + 50*(w.ExpLevel-1) }
+
+// xpFor is the experience it takes to go from level l to l+1.
+func xpFor(l int) int { return 10 * l }
+
+// gainXP adds experience and levels the hero up: each level gives 5 max HP and 1 accuracy, every
+// 2nd level 1 damage and every 3rd 1 armour.
+func (w *World) gainXP(n int) {
+	w.XP += n
+	for w.XP >= xpFor(w.ExpLevel) {
+		w.XP -= xpFor(w.ExpLevel)
+		w.ExpLevel++
+		p := w.Player
+		p.MaxHP += 5
+		p.HP += 5
+		p.Atk++
+		if w.ExpLevel%2 == 0 {
+			p.Dmg++
+		}
+		if w.ExpLevel%3 == 0 {
+			p.Def++
+		}
+		w.say("You reach level %d!", w.ExpLevel)
+	}
+}
 
 // descend moves the hero to the start of a freshly generated next floor.
 func (w *World) descend() {
@@ -175,10 +251,12 @@ func (w *World) descend() {
 	for _, m := range w.Monsters {
 		if m.Boss { // each boss after the first gets half its base HP and 1 damage more
 			m.MaxHP += m.MaxHP * (round - 1) / 2
-			m.HP = m.MaxHP
 			m.Dmg += round - 1
 			w.say("A %s guards the stairs.", m.Name)
+		} else {
+			m.Kind = m.Kind.at(w.Depth)
 		}
+		m.HP = m.MaxHP
 	}
 }
 
@@ -357,6 +435,7 @@ func (w *World) damage(e *Entity, n int) {
 		return
 	}
 	w.Kills++
+	w.gainXP(e.XP)
 	if e.Boss { // the sealed stairs open where it fell
 		w.Level[e.Y] = w.Level[e.Y][:e.X] + ">" + w.Level[e.Y][e.X+1:]
 		w.say("The %s falls. The stairs open!", e.Name)

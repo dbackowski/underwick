@@ -63,8 +63,9 @@ func tactician(w *World) (int, int) {
 	if hunter != nil && hunter.Range == 1 && abs(hunter.X-p.X)+abs(hunter.Y-p.Y) <= hunter.Moves+1 {
 		return 0, 0 // it closes in this turn; waiting gives us the first hit
 	}
-	if hunter == nil && p.HP*3 < p.MaxHP*2 {
-		return 0, 0 // rest
+	sealed := !strings.Contains(strings.Join(w.Level, ""), ">")
+	if hunter == nil && (p.HP*3 < p.MaxHP*2 || sealed && p.HP < p.MaxHP) {
+		return 0, 0 // rest, and before a boss rest to full
 	}
 	return w.botToStairs()
 }

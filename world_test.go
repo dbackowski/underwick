@@ -9,8 +9,8 @@ import (
 
 func TestCombat(t *testing.T) {
 	a, d := newEntity(hero, 0, 0), newEntity(kinds['o'], 0, 0)
-	if got := hitChance(a, d); got != 75 { // 70 + 5 * (2 accuracy - 1 armour)
-		t.Fatalf("hero vs orc should hit 75%% of the time, got %d", got)
+	if got := hitChance(a, d); got != 70 { // 70 + 5 * (2 accuracy - 2 armour)
+		t.Fatalf("hero vs orc should hit 70%% of the time, got %d", got)
 	}
 	a.Atk, a.Def, d.Def = 100, 100, 0
 	if hitChance(a, d) != 95 || hitChance(d, a) != 5 {
@@ -124,6 +124,11 @@ func TestGenerate(t *testing.T) {
 				level[0] != strings.Repeat("#", mapW) || level[mapH-1] != level[0] {
 				t.Fatalf("seed %d depth %d: malformed floor\n%s", seed, depth, strings.Join(level, "\n"))
 			}
+			for _, c := range all { // every monster belongs on this floor
+				if k, ok := kinds[byte(c)]; ok && !k.Boss && !slices.Contains(spawnable(depth), byte(c)) {
+					t.Fatalf("seed %d depth %d: %s doesn't belong here", seed, depth, k.Name)
+				}
+			}
 			if boss != 0 { // minions stand within 2 steps of the boss
 				b, near := strings.IndexByte(all, boss), 0
 				for i, c := range all {
@@ -200,5 +205,41 @@ func TestFOV(t *testing.T) {
 	w.updateFOV()
 	if w.Visible[1][2] || !w.Seen[1][2] {
 		t.Fatal("tiles out of sight should stay remembered")
+	}
+}
+
+func TestMonstersByDepth(t *testing.T) {
+	names := func(depth int) (ns []string) {
+		for _, c := range spawnable(depth) {
+			ns = append(ns, kinds[c].Name)
+		}
+		return ns
+	}
+	if got := names(1); !slices.Contains(got, "rat") || slices.Contains(got, "orc") {
+		t.Fatalf("floor 1 should have rats but no orcs, got %v", got)
+	}
+	if got := names(9); slices.Contains(got, "rat") || !slices.Contains(got, "orc") {
+		t.Fatalf("floor 9 should have orcs but no rats, got %v", got)
+	}
+	if deep := names(100); len(deep) < 5 || !slices.Contains(deep, "demon") {
+		t.Fatalf("the deep should keep a mix of the deepest monsters, got %v", deep)
+	}
+
+	rat := kinds['r'].at(9) // two steps of 4 floors below floor 1
+	if rat.MaxHP != 6 || rat.Atk != 2 || rat.Dmg != 4 || rat.XP != 4 {
+		t.Fatalf("a rat on floor 9 should be stronger, got %+v", rat)
+	}
+}
+
+func TestLevels(t *testing.T) {
+	w := NewWorld([]string{
+		"###",
+		"#@#",
+		"###",
+	})
+	w.gainXP(xpFor(1) + xpFor(2)) // straight to level 3
+	p := w.Player
+	if w.ExpLevel != 3 || w.XP != 0 || p.MaxHP != hero.MaxHP+10 || p.Atk != hero.Atk+2 || p.Dmg != hero.Dmg+1 || p.Def != hero.Def+1 {
+		t.Fatalf("level 3 should add 10 HP, 2 accuracy, 1 damage and 1 armour, got level %d %+v", w.ExpLevel, p.Kind)
 	}
 }

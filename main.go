@@ -199,7 +199,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// HUD: the hero's HP, a visible boss's HP, and the depth.
 	hpBar(screen, 2, float32(viewH*tile+4), 50, 4, max(w.Player.HP, 0), w.Player.MaxHP)
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%d/%d", max(w.Player.HP, 0), w.Player.MaxHP), 56, viewH*tile-3)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%d/%d L%d", max(w.Player.HP, 0), w.Player.MaxHP, w.ExpLevel), 56, viewH*tile-3)
 	for _, m := range w.Monsters {
 		if m.Boss && w.Visible[m.Y][m.X] {
 			hpBar(screen, float32(10*tile+4), float32(viewH*tile+4), 52, 4, m.HP, m.MaxHP)
