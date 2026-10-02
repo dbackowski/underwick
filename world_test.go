@@ -74,7 +74,7 @@ func TestStairs(t *testing.T) {
 	})
 	body := w.Player
 	w.Step(1, 0)
-	if w.Depth != 2 || w.Player != body || w.Level[body.Y][body.X] != '@' {
+	if w.Depth != 2 || w.Player != body || w.Level[body.Y][body.X] != '.' {
 		t.Fatalf("stairs should take the hero to the start of floor 2, got depth %d at %d,%d", w.Depth, body.X, body.Y)
 	}
 }

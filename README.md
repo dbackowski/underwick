@@ -36,7 +36,13 @@ gives the potions their colours and the scrolls their labels anew, and you learn
 You can carry 20 items. Gold is picked up as you walk over it.
 
 Each floor is generated, 40x30 tiles, and you only see what you can see: explored parts stay on the map,
-dimmed. Take the stairs down to reach the next floor. Every 5th floor a boss guards the stairs, which open
+dimmed. Walk into a door to open it; closed doors block sight, and monsters open them too. A dead-end
+room may be a vault behind an iron door (it needs the gold key) or a magic door (the blue key), with the
+key lying elsewhere on the floor and a chest of better loot inside.
+
+Some rooms hold pools that monsters never enter: deep water slows you, giving monsters an extra turn;
+acid burns each turn you stand in it; lava burns badly, so you are warned and must move again to step
+in; and a pit drops you to the next floor, with a fall. Take the stairs down to reach the next floor. Every 5th floor a boss guards the stairs, which open
 when it dies: dragon, beholder, lord, cyclops, demon or reaper, stronger each time round.
 
 Your score is 100 per floor reached, 10 per kill, 50 per level gained, and your gold.

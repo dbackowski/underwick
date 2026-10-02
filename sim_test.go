@@ -75,7 +75,9 @@ func tactician(w *World) (int, int) {
 	}
 	hunter := w.nearest(func(m *Entity) bool { return m.hunting })
 	if hunter != nil && hunter.Range == 1 && abs(hunter.X-p.X)+abs(hunter.Y-p.Y) <= hunter.Moves+1 {
-		return 0, 0 // it closes in this turn; waiting gives us the first hit
+		if _, _, ok := w.stepToward(hunter.X, hunter.Y, p.X, p.Y); ok {
+			return 0, 0 // it closes in this turn; waiting gives us the first hit
+		}
 	}
 	sealed := !strings.Contains(strings.Join(w.Level, ""), ">")
 	if hunter == nil && (p.HP*3 < p.MaxHP*2 || sealed && p.HP < p.MaxHP) {

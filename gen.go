@@ -19,9 +19,31 @@ func (r room) overlaps(o room) bool {
 	return r.x <= o.x+o.w && o.x <= r.x+r.w && r.y <= o.y+o.h && o.y <= r.y+r.h
 }
 
-// generate builds a floor in the format NewWorld parses: rooms joined by corridors, the player in
-// the first room, stairs down ('>') in the room farthest from it, and items and monsters in the others.
-// With a boss (its kind character, or 0 for none), the boss takes the stairs' place; they open when it dies.
+// ring lists the tiles just outside a room's edges, where corridors come in (corners excluded), each
+// with the direction along the ring, so a doorway's two sides can be checked.
+func (r room) ring() [][4]int {
+	var ts [][4]int
+	for x := r.x; x < r.x+r.w; x++ {
+		ts = append(ts, [4]int{x, r.y - 1, 1, 0}, [4]int{x, r.y + r.h, 1, 0})
+	}
+	for y := r.y; y < r.y+r.h; y++ {
+		ts = append(ts, [4]int{r.x - 1, y, 0, 1}, [4]int{r.x + r.w, y, 0, 1})
+	}
+	return ts
+}
+
+// generate builds a floor in the format World.load parses:
+//
+//	#  wall           .  floor             >  stairs down      @  the hero's start
+//	*  an item        (  gold key          )  blue key         &  chest
+//	+  door           1  iron door, locked (gold key)          2  magic door, locked (blue key)
+//	~  deep water     =  lava              %  acid             ^  pit
+//
+// and a kind letter for each monster. Rooms are joined by corridors, often through doors. The hero
+// starts in the first room and the stairs are in the room farthest from it; with a boss (its kind
+// character, or 0 for none) the boss takes the stairs' place, and they open when it dies. A dead-end
+// room may be a locked vault with a chest, its key elsewhere on the floor. Other rooms may hold a
+// pool of water, acid, lava or pits, always leaving the room's edge walkable.
 func generate(rng *rand.Rand, depth int, boss byte) []string {
 	for {
 		g := make([][]byte, mapH)
@@ -69,20 +91,77 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 		}
 
 		sx, sy := rooms[0].center()
-		g[sy][sx] = '@'
-		far := slices.MaxFunc(rooms[1:], func(a, b room) int {
-			ax, ay := a.center()
-			bx, by := b.center()
-			return abs(ax-sx) + abs(ay-sy) - abs(bx-sx) - abs(by-sy)
+		far := slices.IndexFunc(rooms, func(r room) bool {
+			return r == slices.MaxFunc(rooms[1:], func(a, b room) int {
+				ax, ay := a.center()
+				bx, by := b.center()
+				return abs(ax-sx) + abs(ay-sy) - abs(bx-sx) - abs(by-sy)
+			})
 		})
-		fx, fy := far.center()
+
+		// Doors: half the proper doorways, where a corridor meets a room between two walls. A room
+		// entered only through one doorway is a dead end, and may become the vault.
+		vault, key := -1, byte(0)
+		for i, r := range rooms {
+			var entrances, doorways [][2]int
+			for _, t := range r.ring() {
+				x, y, dx, dy := t[0], t[1], t[2], t[3]
+				if g[y][x] == '#' {
+					continue
+				}
+				entrances = append(entrances, [2]int{x, y})
+				if g[y-dy][x-dx] == '#' && g[y+dy][x+dx] == '#' {
+					doorways = append(doorways, [2]int{x, y})
+					if g[y][x] == '.' && rng.IntN(2) == 0 { // a doorway between two rooms may have its door already
+						g[y][x] = '+'
+					}
+				}
+			}
+			if vault < 0 && i != 0 && i != far && depth >= 2 && len(entrances) == 1 && len(doorways) == 1 && rng.IntN(2) == 0 {
+				vault = i
+				d, lock := doorways[0], rng.IntN(2)
+				g[d[1]][d[0]], key = "12"[lock], "()"[lock]
+			}
+		}
+
+		// Hazard pools fill parts of rooms' insides, never their edges, so every entrance still
+		// connects to every other along the edge.
+		for i, r := range rooms {
+			if i == 0 || i == far || i == vault || rng.IntN(3) > 0 {
+				continue
+			}
+			pool := "~"
+			if depth >= 2 && boss == 0 {
+				pool += "^" // no pits on a boss floor: they would drop the hero past the boss
+			}
+			if depth >= 3 {
+				pool += "%"
+			}
+			if depth >= 4 {
+				pool += "="
+			}
+			h := pool[rng.IntN(len(pool))]
+			for y := r.y + 1; y < r.y+r.h-1; y++ {
+				for x := r.x + 1; x < r.x+r.w-1; x++ {
+					if rng.IntN(5) < 3 {
+						g[y][x] = h
+					}
+				}
+			}
+		}
+
+		g[sy][sx] = '@'
+		fx, fy := rooms[far].center()
 		g[fy][fx] = '>'
 		if boss != 0 {
 			g[fy][fx] = boss
 		}
 
 		var spots [][2]int
-		for _, r := range rooms[1:] {
+		for i, r := range rooms[1:] {
+			if i+1 == vault {
+				continue
+			}
 			for y := r.y; y < r.y+r.h; y++ {
 				for x := r.x; x < r.x+r.w; x++ {
 					if g[y][x] == '.' {
@@ -92,6 +171,15 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 			}
 		}
 		rng.Shuffle(len(spots), func(i, j int) { spots[i], spots[j] = spots[j], spots[i] })
+		// The chest in the vault, and its key out on the floor, where the hero can walk to it without
+		// crossing a hazard: pools can leave a dry tile stranded in their middle.
+		reach := walkable(func(x, y int) byte { return g[y][x] }, sx, sy)
+		if k := slices.IndexFunc(spots, func(s [2]int) bool { return reach[s] }); vault >= 0 && k >= 0 {
+			vx, vy := rooms[vault].center()
+			g[vy][vx] = '&'
+			g[spots[k][1]][spots[k][0]] = key
+			spots = slices.Delete(spots, k, k+1)
+		}
 		items := min(4+depth/2, 12, len(spots)) // '*' marks a spot; the world rolls what lies there
 		for _, s := range spots[:items] {
 			g[s[1]][s[0]] = '*'
@@ -122,6 +210,21 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 		}
 		return level
 	}
+}
+
+// walkable maps the tiles reachable from x, y without crossing walls, locked doors, chests or hazards.
+func walkable(tile func(x, y int) byte, x, y int) map[[2]int]bool {
+	seen := map[[2]int]bool{{x, y}: true}
+	for queue := [][2]int{{x, y}}; len(queue) > 0; queue = queue[1:] {
+		for _, d := range dirs {
+			n := [2]int{queue[0][0] + d[0], queue[0][1] + d[1]}
+			if c := tile(n[0], n[1]); !seen[n] && !hazard(c) && !strings.ContainsRune("#12&", rune(c)) {
+				seen[n] = true
+				queue = append(queue, n)
+			}
+		}
+	}
+	return seen
 }
 
 func dist(a, b room) int {

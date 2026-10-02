@@ -111,7 +111,11 @@ func TestSpritesExist(t *testing.T) {
 	for _, k := range itemKinds {
 		names = append(names, "World/"+w.ItemSprite(&Item{ItemKind: k}))
 	}
-	names = append(names, "World/"+gold.Sprite, "Character/"+hero.Name+"_idle_d_1", "FX/arrow_x", "FX/arrow_y")
+	names = append(names, "World/"+gold.Sprite, "World/"+goldKey.Sprite, "World/"+blueKey.Sprite,
+		"Character/"+hero.Name+"_idle_d_1", "FX/arrow_x", "FX/arrow_y")
+	for _, c := range "#.>+/1425~=%^&0" {
+		names = append(names, "World/"+tileSprite(byte(c), themes[0], 1))
+	}
 	for _, th := range themes {
 		names = append(names, "World/floor_"+th.floor, "World/wall_block_"+th.wall, "World/stair_down_"+th.wall)
 	}

@@ -40,7 +40,9 @@ const (
 var assets embed.FS
 
 // Tile sets, one per floor and repeating: the wall and stairs set, and the floor drawn with it.
-var themes = []struct{ wall, floor string }{
+type theme struct{ wall, floor string }
+
+var themes = []theme{
 	{"grey", "grey"}, {"dirt", "dirt"}, {"cave", "dark"},
 	{"hedge", "moss"}, {"stone", "grey"}, {"red", "red"},
 	{"frost", "frost"}, {"ice", "cold"}, {"turret", "mud"},
@@ -186,14 +188,11 @@ func (g *Game) Draw(out *ebiten.Image) {
 			if !w.Seen[y][x] {
 				continue
 			}
-			name := "World/floor_" + theme.floor
-			switch c {
-			case '#':
-				name = "World/wall_block_" + theme.wall
-			case '>':
-				name = "World/stair_down_" + theme.wall
+			alpha := dim(w, x, y)
+			if c != '#' { // doors, liquids and chests sit on floor
+				g.draw(dst, "World/floor_"+theme.floor, x, y, alpha)
 			}
-			g.draw(dst, name, x, y, dim(w, x, y))
+			g.draw(dst, "World/"+tileSprite(byte(c), theme, g.tick/30%2+1), x, y, alpha)
 		}
 	}
 	// Items stay where the hero last saw them; nothing else moves them.
@@ -297,6 +296,41 @@ func (g *Game) Draw(out *ebiten.Image) {
 	if *shot != "" && g.tick > 30 { // let a few idle frames pass first
 		saveShot(out, *shot)
 	}
+}
+
+// tileSprite names the sprite for a map tile, under World/; frame animates liquids.
+func tileSprite(c byte, th theme, frame int) string {
+	switch c {
+	case '#':
+		return "wall_block_" + th.wall
+	case '>':
+		return "stair_down_" + th.wall
+	case '+':
+		return "door_wood_closed"
+	case '/':
+		return "door_wood_open"
+	case '1':
+		return "door_iron_closed"
+	case '4':
+		return "door_iron_open"
+	case '2':
+		return "door_magic_closed"
+	case '5':
+		return "door_magic_open"
+	case '~':
+		return fmt.Sprintf("liquid_water_%d", frame)
+	case '=':
+		return fmt.Sprintf("liquid_lava_%d", frame)
+	case '%':
+		return fmt.Sprintf("liquid_acid_%d", frame)
+	case '^':
+		return "floor_pit"
+	case '&':
+		return "object_chest_closed"
+	case '0':
+		return "object_chest_empty"
+	}
+	return "floor_" + th.floor
 }
 
 // drawInventory lists what the hero carries, lettered, for using or dropping.

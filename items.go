@@ -11,7 +11,7 @@ import (
 type ItemKind struct {
 	Name   string // its true name
 	Sprite string // under World/; potions get theirs from the run's colours
-	Slot   string // where it is worn; "" for potions and scrolls, "gold" for gold
+	Slot   string // where it is worn; "" for potions and scrolls, "gold" for gold, "key" for keys
 
 	Atk, Def, Dmg, MaxHP int // bonuses while worn
 
@@ -22,7 +22,13 @@ type ItemKind struct {
 	use func(w *World) // what a potion or scroll does
 }
 
-var gold = &ItemKind{Name: "gold", Sprite: "object_gold", Slot: "gold"}
+var (
+	gold = &ItemKind{Name: "gold", Sprite: "object_gold", Slot: "gold"}
+
+	// Keys lie only on floors with a vault, one for its lock: walking into the locked door uses it.
+	goldKey = &ItemKind{Name: "gold key", Sprite: "object_key_gold", Slot: "key"}
+	blueKey = &ItemKind{Name: "blue key", Sprite: "object_key_blue", Slot: "key"}
+)
 
 var itemKinds = []*ItemKind{
 	{Name: "dagger", Sprite: "object_dagger", Slot: "weapon", Dmg: 2, Atk: 1, Depth: 1, Weight: 3},
@@ -69,10 +75,12 @@ var itemKinds = []*ItemKind{
 		w.say("A map of the floor forms in your mind.")
 	}},
 	{Name: "scroll of teleport", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) {
+		// Only where the hero could walk to: never into a vault still locked, nor onto a hazard.
+		reach := walkable(func(x, y int) byte { return w.Level[y][x] }, w.Player.X, w.Player.Y)
 		var spots [][2]int
 		for y, row := range w.Level {
 			for x := range row {
-				if row[x] != '#' && row[x] != '>' && w.free(x, y) {
+				if reach[[2]int{x, y}] && row[x] != '>' && w.free(x, y) {
 					spots = append(spots, [2]int{x, y})
 				}
 			}
@@ -245,6 +253,10 @@ func (w *World) Drop(i int) {
 // Use applies an inventory item: wears or takes off gear, drinks a potion, reads a scroll. It takes a turn.
 func (w *World) Use(i int) {
 	if i < 0 || i >= len(w.Inventory) {
+		return
+	}
+	if w.Inventory[i].Slot == "key" {
+		w.Log = []string{"Walk into its locked door to use a key."}
 		return
 	}
 	w.turn(func() {

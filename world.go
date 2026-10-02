@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"slices"
+	"strings"
 )
 
 // Tuning knobs. Per-creature ones live in kinds.
@@ -98,6 +99,13 @@ func (k Kind) at(depth int) Kind {
 	return k
 }
 
+// Tiles, besides '#' wall, '.' floor and '>' stairs down, as generate draws them. A locked door
+// opens to its own open form: iron '1' to '4' with a gold key, magic '2' to '5' with a blue key.
+// An opened chest '&' becomes '0'.
+func blocksSight(c byte) bool { return strings.IndexByte("#+12", c) >= 0 }  // walls and closed doors
+func solid(c byte) bool       { return strings.IndexByte("#+12&", c) >= 0 } // and chests: nothing stands there
+func hazard(c byte) bool      { return strings.IndexByte("~=%^", c) >= 0 }  // water, lava, acid, pits
+
 type Entity struct {
 	Kind
 	X, Y int
@@ -148,6 +156,7 @@ type World struct {
 	known  map[*ItemKind]bool   // potion and scroll kinds the hero has identified
 	bosses string               // the order this run meets the bosses in, as kind characters
 	regen  int                  // turns since the hero last regained HP
+	warned [2]int               // the lava tile the hero was last warned about
 }
 
 // NewWorld starts a run on a given level: '#' wall, '>' stairs down, '@' the hero, '*' an item, kind
@@ -168,28 +177,46 @@ func newRun(rng *rand.Rand) *World {
 	return w
 }
 
-// load puts the hero on a new floor: its monsters, and items rolled for the current depth on its spots.
+// load puts the hero on a new floor: its monsters, its keys, and items rolled for the current depth
+// on its spots. What stands or lies on a tile is taken off the map, leaving plain floor.
 func (w *World) load(level []string) {
-	w.Level, w.Monsters, w.Floor = level, nil, nil
+	w.Monsters, w.Floor = nil, nil
 	var spots [][2]int
+	rows := make([][]byte, len(level))
 	for y, row := range level {
+		rows[y] = []byte(row)
 		for x := range row {
 			switch c := row[x]; c {
 			case '@':
 				w.Player.X, w.Player.Y = x, y
 			case '*':
 				spots = append(spots, [2]int{x, y})
-			default:
-				if k, ok := kinds[c]; ok {
-					w.Monsters = append(w.Monsters, newEntity(k, x, y))
+			case '(', ')':
+				k := goldKey
+				if c == ')' {
+					k = blueKey
 				}
+				w.Floor = append(w.Floor, &Item{ItemKind: k, X: x, Y: y})
+			default:
+				k, ok := kinds[c]
+				if !ok {
+					continue
+				}
+				w.Monsters = append(w.Monsters, newEntity(k, x, y))
 			}
+			rows[y][x] = '.'
 		}
+	}
+	w.Level = make([]string, len(rows))
+	for y := range rows {
+		w.Level[y] = string(rows[y])
 	}
 	w.Seen = grid(level)
 	w.stockItems(spots)
 	w.updateFOV()
 }
+
+func (w *World) setTile(x, y int, c byte) { w.Level[y] = w.Level[y][:x] + string(c) + w.Level[y][x+1:] }
 
 func grid(level []string) [][]bool {
 	g := make([][]bool, len(level))
@@ -214,14 +241,14 @@ func (w *World) updateFOV() {
 	// would show in patches. Show every wall touching a visible floor tile instead.
 	for y := range w.Level {
 		for x := range w.Level[y] {
-			if w.Level[y][x] != '#' || w.Visible[y][x] {
+			if !blocksSight(w.Level[y][x]) || w.Visible[y][x] {
 				continue
 			}
 			for dy := -1; dy <= 1; dy++ {
 				for dx := -1; dx <= 1; dx++ {
 					nx, ny := x+dx, y+dy
 					if ny >= 0 && ny < len(w.Level) && nx >= 0 && nx < len(w.Level[ny]) &&
-						w.Level[ny][nx] != '#' && w.Visible[ny][nx] {
+						!blocksSight(w.Level[ny][nx]) && w.Visible[ny][nx] {
 						w.Visible[y][x], w.Seen[y][x] = true, true
 					}
 				}
@@ -293,8 +320,17 @@ func (w *World) descend() {
 
 func (w *World) say(format string, args ...any) { w.Log = append(w.Log, fmt.Sprintf(format, args...)) }
 
-// Step is one turn of moving or attacking in a direction, or waiting for 0, 0.
+// Step is one turn of moving or attacking in a direction, or waiting for 0, 0. Walking into lava
+// asks first: the first try only warns.
 func (w *World) Step(dx, dy int) {
+	tx, ty := w.Player.X+dx, w.Player.Y+dy
+	if (dx != 0 || dy != 0) && w.Level[ty][tx] == '=' && w.Level[w.Player.Y][w.Player.X] != '=' &&
+		w.warned != [2]int{tx, ty} && !w.Over {
+		w.warned = [2]int{tx, ty}
+		w.Log = []string{"That is lava! Move there again to step in."}
+		return
+	}
+	w.warned = [2]int{}
 	w.turn(func() {
 		if dx != 0 || dy != 0 {
 			w.playerAct(dx, dy)
@@ -314,10 +350,30 @@ func (w *World) turn(act func()) {
 		m.Anim, m.Spotted = "idle", false
 	}
 
+	p, fromX, fromY := w.Player, w.Player.X, w.Player.Y
 	act()
-	if w.Level[w.Player.Y][w.Player.X] == '>' {
+	switch w.Level[p.Y][p.X] {
+	case '>':
 		w.descend()
 		return
+	case '^':
+		w.say("You fall through a pit!")
+		if w.damage(p, 1+w.rng.IntN(6)); !w.Over {
+			w.descend()
+		}
+		return
+	case '=':
+		w.say("The lava burns you!")
+		w.damage(p, 10+w.Depth)
+	case '%':
+		w.say("The acid burns!")
+		w.damage(p, 3)
+	}
+	if w.Over {
+		return
+	}
+	if w.Level[p.Y][p.X] == '~' && (p.X != fromX || p.Y != fromY) {
+		w.monstersAct() // wading is slow: the monsters get an extra turn
 	}
 	if w.Player.HP < w.Player.MaxHP {
 		if w.regen++; w.regen >= regenEvery {
@@ -325,6 +381,10 @@ func (w *World) turn(act func()) {
 			w.Player.HP++
 		}
 	}
+	w.monstersAct()
+}
+
+func (w *World) monstersAct() {
 	// A copy, since monsters can die mid-turn.
 	for _, m := range slices.Clone(w.Monsters) {
 		for range m.Moves {
@@ -335,6 +395,33 @@ func (w *World) turn(act func()) {
 	}
 }
 
+// unlock opens a locked door with the matching key from the pack, which the lock keeps.
+func (w *World) unlock(x, y int, c byte) {
+	door, key, open := "iron door", goldKey, byte('4')
+	if c == '2' {
+		door, key, open = "magic door", blueKey, '5'
+	}
+	i := slices.IndexFunc(w.Inventory, func(it *Item) bool { return it.ItemKind == key })
+	if i < 0 {
+		w.say("The %s is locked. It needs a %s.", door, key.Name)
+		return
+	}
+	w.Inventory = slices.Delete(w.Inventory, i, i+1)
+	w.setTile(x, y, open)
+	w.say("You unlock the %s with the %s.", door, key.Name)
+}
+
+// openChest spills three items onto the chest's tile, better than the floor's own.
+func (w *World) openChest(x, y int) {
+	w.setTile(x, y, '0')
+	for range 3 {
+		it := rollItem(w.rng, w.Depth+2)
+		it.X, it.Y = x, y
+		w.Floor = append(w.Floor, it)
+	}
+	w.say("You open the chest.")
+}
+
 func (w *World) playerAct(dx, dy int) {
 	p := w.Player
 	p.Dir = dirName(dx, dy)
@@ -342,8 +429,25 @@ func (w *World) playerAct(dx, dy int) {
 		w.attack(p, t)
 		return
 	}
-	if tx, ty := p.X+dx, p.Y+dy; w.free(tx, ty) {
+	tx, ty := p.X+dx, p.Y+dy
+	switch c := w.Level[ty][tx]; {
+	case c == '+':
+		w.setTile(tx, ty, '/')
+		w.say("You open the door.")
+	case c == '1' || c == '2':
+		w.unlock(tx, ty, c)
+	case c == '&':
+		w.openChest(tx, ty)
+	case w.free(tx, ty):
 		p.X, p.Y, p.Anim = tx, ty, "walk"
+		switch w.Level[ty][tx] {
+		case '~':
+			w.say("You wade into deep water.")
+		case '%':
+			w.say("You step into acid!")
+		case '=':
+			w.say("You step into lava!")
+		}
 		w.pickUpGold()
 		switch its := w.ItemsAt(p.X, p.Y); len(its) {
 		case 0:
@@ -376,20 +480,24 @@ func (w *World) act(m *Entity) {
 		return
 	}
 	if sx, sy, ok := w.stepToward(m.X, m.Y, m.goalX, m.goalY); ok {
+		if w.Level[m.Y+sy][m.X+sx] == '+' {
+			w.setTile(m.X+sx, m.Y+sy, '/')
+			return
+		}
 		m.X, m.Y, m.Dir, m.Anim = m.X+sx, m.Y+sy, dirName(sx, sy), "walk"
 	}
 }
 
 var dirs = [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
-// canSee reports whether no wall lies on the straight (Bresenham) line between two tiles.
+// canSee reports whether nothing that blocks sight lies on the straight (Bresenham) line between two tiles.
 // The line steps along one axis at a time, so it can't slip through a diagonal gap between two walls.
 func (w *World) canSee(x0, y0, x1, y1 int) bool {
 	dx, dy := abs(x1-x0), -abs(y1-y0)
 	sx, sy := sign(x1-x0), sign(y1-y0)
 	e := dx + dy
 	for x0 != x1 || y0 != y1 {
-		if w.Level[y0][x0] == '#' {
+		if blocksSight(w.Level[y0][x0]) {
 			return false
 		}
 		if e2 := 2 * e; e2 >= dy {
@@ -401,8 +509,9 @@ func (w *World) canSee(x0, y0, x1, y1 int) bool {
 	return true
 }
 
-// stepToward returns a free first step on a shortest path from x, y to gx, gy. Paths go around walls
-// but through creatures, so a monster stuck behind another one waits its turn rather than detouring.
+// stepToward returns a first step on a shortest path from x, y to gx, gy: onto a free tile, or into
+// a closed door to open it. Paths go around walls, locked doors, chests and hazards, but through
+// creatures, so a monster stuck behind another one waits its turn rather than detouring.
 func (w *World) stepToward(x, y, gx, gy int) (dx, dy int, ok bool) {
 	// Breadth-first search outward from the goal until it reaches the start.
 	dist := map[[2]int]int{{gx, gy}: 0}
@@ -410,7 +519,7 @@ func (w *World) stepToward(x, y, gx, gy int) (dx, dy int, ok bool) {
 		c := queue[0]
 		for _, d := range dirs {
 			n := [2]int{c[0] + d[0], c[1] + d[1]}
-			if _, seen := dist[n]; !seen && w.Level[n[1]][n[0]] != '#' {
+			if _, seen := dist[n]; !seen && w.passable(w.Level[n[1]][n[0]]) {
 				dist[n] = dist[c] + 1
 				queue = append(queue, n)
 			}
@@ -421,18 +530,20 @@ func (w *World) stepToward(x, y, gx, gy int) (dx, dy int, ok bool) {
 		return 0, 0, false
 	}
 	for _, d := range dirs {
-		if n, ok := dist[[2]int{x + d[0], y + d[1]}]; ok && n == here-1 && w.free(x+d[0], y+d[1]) {
+		nx, ny := x+d[0], y+d[1]
+		if n, ok := dist[[2]int{nx, ny}]; ok && n == here-1 && (w.free(nx, ny) || w.Level[ny][nx] == '+' && w.monsterAt(nx, ny) == nil) {
 			return d[0], d[1], true
 		}
 	}
 	return 0, 0, false
 }
 
-// firstInLine returns the first creature within n tiles of from in direction dx, dy, stopping at walls.
+// firstInLine returns the first creature within n tiles of from in direction dx, dy, stopping at walls,
+// closed doors and chests.
 func (w *World) firstInLine(from *Entity, dx, dy, n int) *Entity {
 	for i := 1; i <= n; i++ {
 		x, y := from.X+dx*i, from.Y+dy*i
-		if w.Level[y][x] == '#' {
+		if solid(w.Level[y][x]) {
 			return nil
 		}
 		if w.Player.X == x && w.Player.Y == y {
@@ -483,7 +594,7 @@ func (w *World) damage(e *Entity, n int) {
 	w.Kills++
 	w.gainXP(e.XP)
 	if e.Boss { // the sealed stairs open where it fell
-		w.Level[e.Y] = w.Level[e.Y][:e.X] + ">" + w.Level[e.Y][e.X+1:]
+		w.setTile(e.X, e.Y, '>')
 		w.say("The %s falls. The stairs open!", e.Name)
 	} else {
 		w.say("The %s dies.", e.Name)
@@ -500,9 +611,14 @@ func (w *World) monsterAt(x, y int) *Entity {
 	return nil
 }
 
+// free reports whether a creature could step onto a tile now.
 func (w *World) free(x, y int) bool {
-	return w.Level[y][x] != '#' && w.monsterAt(x, y) == nil && (w.Player.X != x || w.Player.Y != y)
+	return !solid(w.Level[y][x]) && w.monsterAt(x, y) == nil && (w.Player.X != x || w.Player.Y != y)
 }
+
+// passable is what paths may cross: anything but solid tiles and hazards, though closed wooden doors
+// count, since walking into one opens it.
+func (w *World) passable(c byte) bool { return c == '+' || !solid(c) && !hazard(c) }
 
 func dirName(dx, dy int) string {
 	switch {
