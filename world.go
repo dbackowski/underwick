@@ -30,7 +30,8 @@ type Kind struct {
 	Boss    bool   // guards a floor's stairs, which open when it dies
 }
 
-var hero = Kind{Name: "warrior", MaxHP: 20, Atk: 2, Def: 1, Dmg: 6, Moves: 1, Range: 1}
+// hero is the warrior's base, before levels and gear; it starts with a sword, see newRun.
+var hero = Kind{Name: "warrior", MaxHP: 20, Atk: 2, Def: 1, Dmg: 2, Moves: 1, Range: 1}
 
 // kinds maps a level character to a monster type.
 // kinds maps a level character to a monster type.
@@ -133,29 +134,61 @@ type World struct {
 	Seen     [][]bool // tiles the player has ever seen on this floor
 	Depth    int      // current floor, from 1 down without end
 	Kills    int
-	ExpLevel int  // the hero's experience level, from 1
-	XP       int  // experience toward the next level
+	ExpLevel int // the hero's experience level, from 1
+	XP       int // experience toward the next level
+	Gold     int
 	Over     bool // the hero is dead
-	rng      *rand.Rand
-	bosses   string // the order this run meets the bosses in, as kind characters
-	regen    int    // turns since the hero last regained HP
+
+	Inventory []*Item
+	Floor     []*Item // items lying on this floor
+
+	rng    *rand.Rand
+	base   Kind                 // the hero's stats before gear; levels raise these
+	faces  map[*ItemKind]string // this run's potion colours and scroll labels
+	known  map[*ItemKind]bool   // potion and scroll kinds the hero has identified
+	bosses string               // the order this run meets the bosses in, as kind characters
+	regen  int                  // turns since the hero last regained HP
 }
 
-// NewWorld parses a level: '#' wall, '>' stairs down, '@' the hero, kind letters for monsters.
+// NewWorld starts a run on a given level: '#' wall, '>' stairs down, '@' the hero, '*' an item, kind
+// letters for monsters. Tests use it with hand-drawn levels.
 func NewWorld(level []string) *World {
-	w := &World{Level: level, Depth: 1, ExpLevel: 1, rng: rand.New(rand.NewPCG(1, 0))}
+	w := newRun(rand.New(rand.NewPCG(1, 0)))
+	w.load(level)
+	return w
+}
+
+// newRun makes a fresh hero, carrying and wielding a sword, for a run drawing on rng.
+func newRun(rng *rand.Rand) *World {
+	w := &World{Depth: 1, ExpLevel: 1, rng: rng, base: hero, known: map[*ItemKind]bool{}}
+	w.Player = newEntity(hero, 0, 0)
+	w.shuffleFaces()
+	w.Inventory = []*Item{{ItemKind: kindNamed("sword"), Worn: true}}
+	w.recalc()
+	return w
+}
+
+// load puts the hero on a new floor: its monsters, and items rolled for the current depth on its spots.
+func (w *World) load(level []string) {
+	w.Level, w.Monsters, w.Floor = level, nil, nil
+	var spots [][2]int
 	for y, row := range level {
 		for x := range row {
-			if row[x] == '@' {
-				w.Player = newEntity(hero, x, y)
-			} else if k, ok := kinds[row[x]]; ok {
-				w.Monsters = append(w.Monsters, newEntity(k, x, y))
+			switch c := row[x]; c {
+			case '@':
+				w.Player.X, w.Player.Y = x, y
+			case '*':
+				spots = append(spots, [2]int{x, y})
+			default:
+				if k, ok := kinds[c]; ok {
+					w.Monsters = append(w.Monsters, newEntity(k, x, y))
+				}
 			}
 		}
 	}
 	w.Seen = grid(level)
+	w.stockItems(spots)
 	w.updateFOV()
-	return w
 }
 
 func grid(level []string) [][]bool {
@@ -200,19 +233,20 @@ func (w *World) updateFOV() {
 // NewGame starts a run on a generated first floor. The same seed always plays out the same way.
 func NewGame(seed uint64) *World {
 	rng := rand.New(rand.NewPCG(seed, 0))
-	w := NewWorld(generate(rng, 1, 0))
-	w.rng = rng
+	w := newRun(rng)
+	w.load(generate(rng, 1, 0))
 	for _, i := range rng.Perm(len(bossKinds)) {
 		w.bosses += bossKinds[i : i+1]
 	}
 	return w
 }
 
-// Score counts how deep the hero got, how much it killed and the level it reached.
-func (w *World) Score() int { return 100*w.Depth + 10*w.Kills + 50*(w.ExpLevel-1) }
+// Score counts how deep the hero got, how much it killed, the level it reached and its gold.
+func (w *World) Score() int { return 100*w.Depth + 10*w.Kills + 50*(w.ExpLevel-1) + w.Gold }
 
-// xpFor is the experience it takes to go from level l to l+1.
-func xpFor(l int) int { return 10 * l }
+// xpFor is the experience it takes to go from level l to l+1. It grows with the square of the level:
+// with a gentler curve the hero outgrows the monsters and a good run never ends.
+func xpFor(l int) int { return 5 * l * l }
 
 // gainXP adds experience and levels the hero up: each level gives 5 max HP and 1 accuracy, every
 // 2nd level 1 damage and every 3rd 1 armour.
@@ -221,16 +255,16 @@ func (w *World) gainXP(n int) {
 	for w.XP >= xpFor(w.ExpLevel) {
 		w.XP -= xpFor(w.ExpLevel)
 		w.ExpLevel++
-		p := w.Player
-		p.MaxHP += 5
-		p.HP += 5
-		p.Atk++
+		w.base.MaxHP += 5
+		w.base.Atk++
 		if w.ExpLevel%2 == 0 {
-			p.Dmg++
+			w.base.Dmg++
 		}
 		if w.ExpLevel%3 == 0 {
-			p.Def++
+			w.base.Def++
 		}
+		w.recalc()
+		w.Player.HP += 5
 		w.say("You reach level %d!", w.ExpLevel)
 	}
 }
@@ -243,10 +277,7 @@ func (w *World) descend() {
 	if w.Depth%bossEvery == 0 && len(w.bosses) > 0 {
 		boss = w.bosses[(round-1)%len(w.bosses)]
 	}
-	next := NewWorld(generate(w.rng, w.Depth, boss))
-	w.Player.X, w.Player.Y = next.Player.X, next.Player.Y
-	w.Level, w.Monsters, w.Seen = next.Level, next.Monsters, next.Seen
-	defer w.updateFOV()
+	w.load(generate(w.rng, w.Depth, boss))
 	w.say("Deep %d.", w.Depth)
 	for _, m := range w.Monsters {
 		if m.Boss { // each boss after the first gets half its base HP and 1 damage more
@@ -262,8 +293,17 @@ func (w *World) descend() {
 
 func (w *World) say(format string, args ...any) { w.Log = append(w.Log, fmt.Sprintf(format, args...)) }
 
-// Step is one turn: the hero acts (dx, dy of 0, 0 waits), then every monster.
+// Step is one turn of moving or attacking in a direction, or waiting for 0, 0.
 func (w *World) Step(dx, dy int) {
+	w.turn(func() {
+		if dx != 0 || dy != 0 {
+			w.playerAct(dx, dy)
+		}
+	})
+}
+
+// turn runs one turn: the hero's action, then every monster.
+func (w *World) turn(act func()) {
 	if w.Over {
 		return
 	}
@@ -274,12 +314,10 @@ func (w *World) Step(dx, dy int) {
 		m.Anim, m.Spotted = "idle", false
 	}
 
-	if dx != 0 || dy != 0 {
-		w.playerAct(dx, dy)
-		if w.Level[w.Player.Y][w.Player.X] == '>' {
-			w.descend()
-			return
-		}
+	act()
+	if w.Level[w.Player.Y][w.Player.X] == '>' {
+		w.descend()
+		return
 	}
 	if w.Player.HP < w.Player.MaxHP {
 		if w.regen++; w.regen >= regenEvery {
@@ -306,6 +344,14 @@ func (w *World) playerAct(dx, dy int) {
 	}
 	if tx, ty := p.X+dx, p.Y+dy; w.free(tx, ty) {
 		p.X, p.Y, p.Anim = tx, ty, "walk"
+		w.pickUpGold()
+		switch its := w.ItemsAt(p.X, p.Y); len(its) {
+		case 0:
+		case 1:
+			w.say("You see a %s here.", w.ItemName(its[0]))
+		default:
+			w.say("Several items lie here.")
+		}
 	}
 }
 

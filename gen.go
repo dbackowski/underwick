@@ -20,7 +20,7 @@ func (r room) overlaps(o room) bool {
 }
 
 // generate builds a floor in the format NewWorld parses: rooms joined by corridors, the player in
-// the first room, stairs down ('>') in the room farthest from it, and monsters in the other rooms.
+// the first room, stairs down ('>') in the room farthest from it, and items and monsters in the others.
 // With a boss (its kind character, or 0 for none), the boss takes the stairs' place; they open when it dies.
 func generate(rng *rand.Rand, depth int, boss byte) []string {
 	for {
@@ -92,6 +92,11 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 			}
 		}
 		rng.Shuffle(len(spots), func(i, j int) { spots[i], spots[j] = spots[j], spots[i] })
+		items := min(4+depth/2, 12, len(spots)) // '*' marks a spot; the world rolls what lies there
+		for _, s := range spots[:items] {
+			g[s[1]][s[0]] = '*'
+		}
+		spots = spots[items:]
 		// ponytail: the count grows straight to 20 a floor; tune once the game is played
 		pool := spawnable(depth)
 		n := min(4+2*depth, 20, len(spots))

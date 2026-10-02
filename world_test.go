@@ -17,7 +17,8 @@ func TestCombat(t *testing.T) {
 		t.Fatal("hit chance should stay between 5% and 95%")
 	}
 
-	// Hitting until the rat dies: every hit deals 1 to the hero's damage, and the kill is counted.
+	// Hitting until the rat dies: every hit deals 1 to the hero's damage (sword included), and the kill
+	// is counted.
 	w := NewWorld([]string{
 		"####",
 		"#@r#",
@@ -29,8 +30,8 @@ func TestCombat(t *testing.T) {
 		before := rat.HP
 		w.Player.HP = w.Player.MaxHP // keep it alive for the test
 		w.Step(1, 0)
-		if lost := before - rat.HP; lost < 0 || lost > hero.Dmg {
-			t.Fatalf("a hit should deal 1 to %d, dealt %d", hero.Dmg, lost)
+		if lost := before - rat.HP; lost < 0 || lost > w.Player.Dmg {
+			t.Fatalf("a hit should deal 1 to %d, dealt %d", w.Player.Dmg, lost)
 		}
 	}
 	rat.HP = 1
@@ -237,9 +238,10 @@ func TestLevels(t *testing.T) {
 		"#@#",
 		"###",
 	})
+	was := w.Player.Kind
 	w.gainXP(xpFor(1) + xpFor(2)) // straight to level 3
 	p := w.Player
-	if w.ExpLevel != 3 || w.XP != 0 || p.MaxHP != hero.MaxHP+10 || p.Atk != hero.Atk+2 || p.Dmg != hero.Dmg+1 || p.Def != hero.Def+1 {
+	if w.ExpLevel != 3 || w.XP != 0 || p.MaxHP != was.MaxHP+10 || p.Atk != was.Atk+2 || p.Dmg != was.Dmg+1 || p.Def != was.Def+1 {
 		t.Fatalf("level 3 should add 10 HP, 2 accuracy, 1 damage and 1 armour, got level %d %+v", w.ExpLevel, p.Kind)
 	}
 }
