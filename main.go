@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"io/fs"
 	"log"
+	"math"
 	"math/rand/v2"
 	"os"
 	"slices"
@@ -70,7 +71,9 @@ type Game struct {
 	place    int           // its place there, from 0, or -1
 	notice   string        // a problem to show on the title screen
 	tick     int
-	turnTick int // tick of the last turn, to time its animations
+	turnTick int       // tick of the last turn, to time its animations
+	lastTurn int       // the world's turn count when the screen last looked
+	floats   []floater // HP changes rising off creatures
 }
 
 // loadSprites keys each sprite by its path under assets/ without extension, e.g. "Character/rat_idle_d_1".
@@ -167,7 +170,7 @@ func (g *Game) Update() error {
 				g.notice = "Couldn't continue: " + err.Error()
 				return nil
 			}
-			g.world, g.mode, g.recorded = w, "", false
+			g.world, g.mode, g.recorded, g.lastTurn = w, "", false, w.Turn
 		case justPressed(ebiten.KeyH):
 			g.back, g.mode = "title", "scores"
 		case justPressed(ebiten.KeyK):
@@ -199,7 +202,7 @@ func (g *Game) Update() error {
 			g.mode = "title"
 		} else if i, ok := letter(len(classes)); ok {
 			DeleteSave() // a new run gives up the saved one
-			g.world, g.mode, g.recorded = NewGame(rand.Uint64(), classes[i]), "", false
+			g.world, g.mode, g.recorded, g.lastTurn = NewGame(rand.Uint64(), classes[i]), "", false, 0
 		}
 		return nil
 	}
@@ -245,14 +248,16 @@ func (g *Game) Update() error {
 		default:
 			w.Cast(i, 0, 0)
 		}
-		g.mode, g.turnTick = "", g.tick
+		g.mode = ""
+		g.afterAction()
 		return nil
 	case "aim":
 		if justPressed(ebiten.KeyEscape) {
 			g.mode, w.Log = "", nil
 		} else if dx != 0 || dy != 0 {
 			w.Cast(g.spell, dx, dy)
-			g.mode, g.turnTick = "", g.tick
+			g.mode = ""
+			g.afterAction()
 		}
 		return nil
 	}
@@ -278,9 +283,44 @@ func (g *Game) Update() error {
 	default:
 		return nil
 	}
-	g.turnTick = g.tick
+	g.afterAction()
 	return nil
 }
+
+// afterAction starts the turn's animations, if the action took a turn, and floats its HP changes.
+func (g *Game) afterAction() {
+	w := g.world
+	if w.Turn != g.lastTurn {
+		g.lastTurn, g.turnTick = w.Turn, g.tick
+	}
+	stack := map[*Entity]int{}
+	for _, h := range w.TakeHits() {
+		s, c := fmt.Sprint(h.Amount), color.NRGBA{0xff, 0xff, 0xff, 0xff}
+		switch {
+		case h.Kind == 'm':
+			s, c = "miss", color.NRGBA{0xa0, 0xa0, 0xa0, 0xff}
+		case h.Kind == 'h':
+			s, c = "+"+s, color.NRGBA{0x60, 0xe0, 0x60, 0xff}
+		case h.Kind == 'p':
+			c = color.NRGBA{0xc0, 0x70, 0xff, 0xff}
+		case h.To == w.Player:
+			c = color.NRGBA{0xff, 0x50, 0x50, 0xff}
+		}
+		g.floats = append(g.floats, floater{s, h.To.X, h.To.Y, stack[h.To], c, g.tick})
+		stack[h.To]++
+	}
+}
+
+// floater is a number rising from a creature whose HP changed, fading as it goes.
+type floater struct {
+	s     string
+	x, y  int // the tile it rises from
+	stack int // how many rose from the same creature this turn before it, to keep them apart
+	c     color.NRGBA
+	born  int
+}
+
+const floatTime = 45 // ticks a number takes to rise and fade
 
 func (g *Game) Draw(out *ebiten.Image) {
 	if g.low == nil {
@@ -350,17 +390,26 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 			shown = append(shown, m)
 		}
 	}
+	faint := color.RGBA{0x90, 0x90, 0x90, 0x60}
 	for _, m := range shown {
-		g.drawEntity(dst, m, color.RGBA{0x90, 0x90, 0x90, 0x60})
+		if m.Lunge == [2]int{} {
+			g.drawEntity(dst, m, faint)
+		}
 	}
 	// The hero gets a blue outline, so it stands out from monsters that look like heroes.
 	g.drawEntity(dst, w.Player, color.RGBA{0x40, 0x99, 0xff, 0xff})
+	for _, m := range shown { // a monster lunging at the hero is drawn over it
+		if m.Lunge != [2]int{} {
+			g.drawEntity(dst, m, faint)
+		}
+	}
 
 	// Over the sprites: HP bars on hurt monsters, and an alert on those that just spotted the player.
 	for _, m := range shown {
-		x, y, width := float32(m.X*tile+1), float32(m.Y*tile), float32(tile-2)
+		mx, my := g.at(m)
+		x, y, width := float32(mx+1), float32(my), float32(tile-2)
 		if m.Boss { // its sprite reaches half a tile beyond its own
-			x, y, width = float32(m.X*tile-tile/2), float32(m.Y*tile-tile/2-2), float32(2*tile)
+			x, y, width = float32(mx-tile/2), float32(my-tile/2-2), float32(2*tile)
 		}
 		if m.HP < m.MaxHP {
 			hpBar(dst, x, y, width, 1, m.HP, m.MaxHP)
@@ -377,7 +426,8 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 	}
 	if icon := statusIcon(w.Player); icon != "" {
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64(w.Player.X*tile+2), float64(w.Player.Y*tile-9))
+		px, py := g.at(w.Player)
+		op.GeoM.Translate(px+2, py-9)
 		dst.DrawImage(g.sprite(fmt.Sprintf("FX/%s_%d", icon, g.tick/10%2+1)), op)
 	}
 
@@ -403,10 +453,25 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 		}
 	}
 
-	// The camera keeps the player centred, stopping at the floor's edges.
-	cx := min(max(w.Player.X-viewW/2, 0), mapW-viewW)
-	cy := min(max(w.Player.Y-viewH/2, 0), mapH-viewH)
-	screen.DrawImage(dst.SubImage(image.Rect(cx*tile, cy*tile, (cx+viewW)*tile, (cy+viewH)*tile)).(*ebiten.Image), nil)
+	// The camera keeps the hero centred as it moves, stopping at the floor's edges.
+	hx, hy := g.at(w.Player)
+	cx := min(max(int(hx)-viewW/2*tile, 0), (mapW-viewW)*tile)
+	cy := min(max(int(hy)-viewH/2*tile, 0), (mapH-viewH)*tile)
+	screen.DrawImage(dst.SubImage(image.Rect(cx, cy, cx+viewW*tile, cy+viewH*tile)).(*ebiten.Image), nil)
+
+	// HP changes rise off the creatures and fade, where the hero can see.
+	g.floats = slices.DeleteFunc(g.floats, func(f floater) bool { return g.tick-f.born >= floatTime })
+	for _, f := range g.floats {
+		if !w.Visible[f.y][f.x] {
+			continue
+		}
+		age := float64(g.tick-f.born) / floatTime
+		c := f.c
+		c.A = uint8(255 * min(1, 2*(1-age))) // solid for the first half, then fading
+		x := float64(f.x*tile+tile/2-cx) - text.Advance(f.s, font)/scale/2
+		y := float64(f.y*tile-cy) - 6 - 8*age - float64(f.stack)*7
+		g.label(f.s, x, y, c)
+	}
 
 	// HUD: the hero's HP, mana and level, a visible boss's HP, gold and the depth.
 	hud := float64(viewH*tile + 2)
@@ -686,15 +751,32 @@ func saveShot(screen *ebiten.Image, path string) {
 }
 
 // drawEntity draws a creature in its current animation frame, over a 1px outline of the given colour.
+// at is where a creature is drawn this frame, in floor pixels: sliding over from where it began the
+// turn (unless it jumped, like a teleport), and lunging halfway at whatever it struck in melee.
+func (g *Game) at(e *Entity) (float64, float64) {
+	x, y := float64(e.X*tile), float64(e.Y*tile)
+	t := float64(g.tick-g.turnTick) / animTime
+	if t >= 1 {
+		return x, y
+	}
+	if d := abs(e.X-e.FromX) + abs(e.Y-e.FromY); d > 0 && d <= 2 {
+		fx, fy := float64(e.FromX*tile), float64(e.FromY*tile)
+		x, y = fx+(x-fx)*t, fy+(y-fy)*t
+	}
+	l := math.Sin(math.Pi*t) * tile / 2
+	return x + float64(e.Lunge[0])*l, y + float64(e.Lunge[1])*l
+}
+
 func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, outline color.RGBA) {
 	since := g.tick - g.turnTick
 	anim, frame := e.Anim, since/(animTime/2)%2+1
 	if since >= animTime {
 		anim, frame = "idle", g.tick/20%2+1
 	}
+	px, py := g.at(e)
 	if e.Boss { // 24px sprite centred on its one tile, spilling over the neighbours
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64(e.X*tile-tile/2), float64(e.Y*tile-tile/2))
+		op.GeoM.Translate(px-tile/2, py-tile/2)
 		dst.DrawImage(g.sprite(fmt.Sprintf("Bosses/%s_%s_%s_%d", e.Name, anim, e.Dir, frame)), op)
 		return
 	}
@@ -705,10 +787,12 @@ func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, outline color.RGBA) {
 	cm.Translate(float64(outline.R)/0xff, float64(outline.G)/0xff, float64(outline.B)/0xff, 0)
 	for _, d := range [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 		op := &colorm.DrawImageOptions{}
-		op.GeoM.Translate(float64(e.X*tile+d[0]), float64(e.Y*tile+d[1]))
+		op.GeoM.Translate(px+float64(d[0]), py+float64(d[1]))
 		colorm.DrawImage(dst, g.sprite(name), cm, op)
 	}
-	g.draw(dst, name, e.X, e.Y, 1)
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(px, py)
+	dst.DrawImage(g.sprite(name), op)
 }
 
 func (g *Game) sprite(name string) *ebiten.Image {

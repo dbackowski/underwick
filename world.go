@@ -122,6 +122,10 @@ type Entity struct {
 
 	Spotted bool // a monster that noticed the player this step, for the alert icon
 
+	// For animating the turn: where it stood when the turn began, and the way it struck in melee.
+	FromX, FromY int
+	Lunge        [2]int
+
 	Poison   int // turns left of losing 1 HP a turn
 	Confused int // turns left of stumbling about
 	Sleep    int // turns left asleep; asleep until woken, if negative
@@ -132,7 +136,14 @@ type Entity struct {
 }
 
 func newEntity(k Kind, x, y int) *Entity {
-	return &Entity{Kind: k, X: x, Y: y, HP: k.MaxHP, Dir: "d", Anim: "idle"}
+	return &Entity{Kind: k, X: x, Y: y, HP: k.MaxHP, Dir: "d", Anim: "idle", FromX: x, FromY: y}
+}
+
+// Hit is a change to a creature's HP this turn, kept for the floating numbers.
+type Hit struct {
+	To     *Entity
+	Amount int
+	Kind   byte // 'd' damage, 'p' poison, 'h' healing, 'm' a miss
 }
 
 // Shot is a missile fired this step, kept for the renderer.
@@ -148,6 +159,8 @@ type World struct {
 	Player   *Entity
 	Monsters []*Entity
 	Shots    []Shot
+	Hits     []Hit    // HP changes this turn, until the screen takes them, see TakeHits
+	Turn     int      // turns played, so the screen can tell an action from one that did nothing
 	Log      []string // what happened this step, in order, for the message line
 	Visible  [][]bool // tiles the player sees right now, by [y][x]
 	Seen     [][]bool // tiles the player has ever seen on this floor
@@ -241,6 +254,7 @@ func (w *World) load(level []string) {
 	w.Seen = grid(level)
 	w.stockItems(spots)
 	w.idle = 0
+	w.Player.FromX, w.Player.FromY = w.Player.X, w.Player.Y // arrive, rather than slide across the map
 	w.updateFOV()
 }
 
@@ -354,7 +368,7 @@ func (w *World) gainXP(n int) {
 			w.base.Def++
 		}
 		w.recalc()
-		w.Player.HP += 5
+		w.heal(w.Player, 5)
 		if w.MaxMana > 0 {
 			w.MaxMana += 2
 			w.Mana += 2
@@ -428,10 +442,10 @@ func (w *World) turn(act func()) {
 		return
 	}
 	defer w.updateFOV()
-	w.Shots, w.Log = nil, nil
-	w.Player.Anim = "idle"
-	for _, m := range w.Monsters {
-		m.Anim, m.Spotted = "idle", false
+	w.Turn++
+	w.Shots, w.Log, w.Hits = nil, nil, nil
+	for _, e := range append([]*Entity{w.Player}, w.Monsters...) {
+		e.Anim, e.Spotted, e.Lunge, e.FromX, e.FromY = "idle", false, [2]int{}, e.X, e.Y
 	}
 
 	p, fromX, fromY := w.Player, w.Player.X, w.Player.Y
@@ -488,7 +502,7 @@ func (w *World) turn(act func()) {
 	if p.Poison > 0 && !w.Over {
 		p.Poison--
 		w.hurtBy = "poison"
-		w.damage(p, 1)
+		w.hurt(p, 1, 'p')
 	}
 }
 
@@ -699,8 +713,11 @@ func (w *World) attack(a, t *Entity) {
 	a.Anim = "atk"
 	if abs(t.X-a.X)+abs(t.Y-a.Y) > 1 {
 		w.Shots = append(w.Shots, Shot{a.X, a.Y, t, a.Missile})
+	} else {
+		a.Lunge = [2]int{t.X - a.X, t.Y - a.Y}
 	}
 	if w.rng.IntN(100) >= hitChance(a, t) {
+		w.Hits = append(w.Hits, Hit{t, 0, 'm'})
 		if a == w.Player {
 			w.say("You miss the %s.", t.Name)
 		} else {
@@ -728,7 +745,26 @@ func (w *World) attack(a, t *Entity) {
 	}
 }
 
-func (w *World) damage(e *Entity, n int) {
+func (w *World) damage(e *Entity, n int) { w.hurt(e, n, 'd') }
+
+// heal gives a creature back up to n HP, no more than its most.
+func (w *World) heal(e *Entity, n int) {
+	n = min(n, e.MaxHP-e.HP)
+	e.HP += n
+	if n > 0 {
+		w.Hits = append(w.Hits, Hit{e, n, 'h'})
+	}
+}
+
+// TakeHits hands the screen the HP changes since it last asked.
+func (w *World) TakeHits() []Hit {
+	hs := w.Hits
+	w.Hits = nil
+	return hs
+}
+
+func (w *World) hurt(e *Entity, n int, kind byte) {
+	w.Hits = append(w.Hits, Hit{e, n, kind})
 	e.HP -= n
 	e.Sleep = 0
 	if e.HP > 0 {

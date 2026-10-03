@@ -54,13 +54,13 @@ var itemKinds = []*ItemKind{
 	{Name: "amulet of life", Sprite: "object_amulet", Slot: "amulet", MaxHP: 10, Depth: 6, Weight: 1},
 
 	{Name: "potion of healing", Class: 'p', Depth: 1, Weight: 8, use: func(w *World) {
-		w.Player.HP = min(w.Player.MaxHP, w.Player.HP+20)
+		w.heal(w.Player, 20)
 		w.say("You feel much better.")
 	}},
 	{Name: "potion of vigour", Class: 'p', Depth: 1, Weight: 2, use: func(w *World) {
 		w.base.MaxHP += 5
 		w.recalc()
-		w.Player.HP += 5
+		w.heal(w.Player, 5)
 		w.say("You feel more robust.")
 	}},
 	{Name: "potion of poison", Class: 'p', Depth: 1, Weight: 3, use: func(w *World) {

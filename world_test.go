@@ -245,3 +245,46 @@ func TestLevels(t *testing.T) {
 		t.Fatalf("level 3 should add 10 HP, 2 accuracy, 1 damage and 1 armour, got level %d %+v", w.ExpLevel, p.Kind)
 	}
 }
+
+// A turn records what the screen needs to animate it: HP changes, where creatures started, and who
+// lunged where.
+func TestTurnRecords(t *testing.T) {
+	w := NewWorld([]string{
+		"######",
+		"#@r..#",
+		"######",
+	})
+	rat := w.Monsters[0]
+	w.Step(1, 0)
+	if w.Player.Lunge != [2]int{1, 0} {
+		t.Fatalf("the hero striking east should lunge east, got %v", w.Player.Lunge)
+	}
+	hits := w.TakeHits()
+	if len(hits) == 0 || hits[0].To != rat || hits[0].Kind != 'd' && hits[0].Kind != 'm' {
+		t.Fatalf("the hero's blow on the rat should be recorded first, got %+v", hits)
+	}
+	if len(w.TakeHits()) != 0 {
+		t.Fatal("taking the hits should clear them")
+	}
+
+	w = runAs(classNamed("archer"), "#######", "#@...o#", "#######")
+	w.Step(1, 0)
+	if w.Player.Lunge != [2]int{} || len(w.Shots) != 1 {
+		t.Fatal("shooting from range should not lunge")
+	}
+
+	w = NewWorld([]string{"####", "#@.#", "####"})
+	w.Player.HP = w.Player.MaxHP - 3
+	w.heal(w.Player, 20)
+	if hs := w.TakeHits(); len(hs) != 1 || hs[0].Kind != 'h' || hs[0].Amount != 3 {
+		t.Fatalf("healing should record only what it restored, got %+v", hs)
+	}
+	w.Player.Poison = 1
+	w.Step(1, 0)
+	if w.Player.FromX != 1 || w.Player.X != 2 {
+		t.Fatal("the hero should remember where it began the turn")
+	}
+	if hs := w.TakeHits(); len(hs) != 1 || hs[0].Kind != 'p' {
+		t.Fatalf("poison should be recorded as poison, got %+v", hs)
+	}
+}

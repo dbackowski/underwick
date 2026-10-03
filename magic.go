@@ -48,7 +48,7 @@ var spells = []*Spell{
 	}},
 	{Name: "heal", Cost: 8, cast: func(w *World, dx, dy int) {
 		p := w.Player
-		p.HP = min(p.MaxHP, p.HP+4+w.ExpLevel)
+		w.heal(p, 4+w.ExpLevel)
 		p.Poison = 0
 		w.say("You feel better.")
 	}},
