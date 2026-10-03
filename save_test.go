@@ -23,10 +23,16 @@ func TestSaveAndContinue(t *testing.T) {
 	dataDir = t.TempDir()
 	tested := 0
 	for _, c := range classes {
-		w := NewGame(42, c)
-		for range 400 { // a stretch of play, items and spells included
-			if !w.Over && !w.botItems() {
-				w.Step(tactician(w))
+		var w *World
+		for seed := uint64(42); seed < 52; seed++ { // a seed this class survives a stretch of play on
+			w = NewGame(seed, c)
+			for range 400 { // items and spells included
+				if !w.Over && !w.botItems() {
+					w.Step(tactician(w))
+				}
+			}
+			if !w.Over {
+				break
 			}
 		}
 		if w.Over {
@@ -47,8 +53,8 @@ func TestSaveAndContinue(t *testing.T) {
 		}
 		tested++
 	}
-	if tested < 3 {
-		t.Fatalf("only %d classes survived the stretch of play to be saved; pick another seed", tested)
+	if tested < len(classes) {
+		t.Fatalf("only %d classes survived a stretch of play to be saved; try more seeds", tested)
 	}
 
 	os.WriteFile(savePath(), []byte(`{"Version": 0, "Seed": 1, "Class": "warrior"}`), 0o644)

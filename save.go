@@ -20,7 +20,7 @@ var dataDir = func() string {
 }()
 
 // saveVersion goes up whenever a change to the rules would replay an old save differently.
-const saveVersion = 1
+const saveVersion = 2
 
 // Action is one thing the hero did, enough to do it again: a save is the run's seed, class and actions,
 // replayed on load. The game draws all its chance from the seed, so a replay ends where the run left.

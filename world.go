@@ -15,6 +15,11 @@ const (
 	bossEvery  = 5 // floors between bosses
 )
 
+// wanderEvery is how many turns pass between monsters wandering onto a floor, so waiting has a price.
+var wanderEvery = 150
+
+const maxMonsters = 30 // wanderers stop coming once a floor holds this many
+
 // Kind is a creature type. Name doubles as the sprite prefix.
 type Kind struct {
 	Name  string
@@ -172,6 +177,7 @@ type World struct {
 	manaIn int                  // turns since the hero last regained mana
 	seed   uint64               // the run's seed, for saving
 	hurtBy string               // what is hurting the hero this turn, for the cause of death
+	idle   int                  // turns since a monster last wandered onto this floor
 }
 
 // NewWorld starts a warrior's run on a given level, in the format generate makes. Tests use it with
@@ -234,7 +240,31 @@ func (w *World) load(level []string) {
 	}
 	w.Seen = grid(level)
 	w.stockItems(spots)
+	w.idle = 0
 	w.updateFOV()
+}
+
+// wander brings a monster of the floor's kinds onto it, out of the hero's sight but where it can walk to
+// the hero, already on the hero's trail.
+func (w *World) wander() {
+	p := w.Player
+	reach := walkable(func(x, y int) byte { return w.Level[y][x] }, p.X, p.Y)
+	var spots [][2]int
+	for y, row := range w.Level { // in order, not over the map: a replayed save must pick the same tile
+		for x := range row {
+			if reach[[2]int{x, y}] && !w.Visible[y][x] && row[x] != '>' && w.free(x, y) && abs(x-p.X)+abs(y-p.Y) >= 8 {
+				spots = append(spots, [2]int{x, y})
+			}
+		}
+	}
+	if len(spots) == 0 {
+		return
+	}
+	s := spots[w.rng.IntN(len(spots))]
+	pool := spawnable(w.Depth)
+	m := newEntity(kinds[pool[w.rng.IntN(len(pool))]].at(w.Depth), s[0], s[1])
+	m.hunting, m.goalX, m.goalY = true, p.X, p.Y
+	w.Monsters = append(w.Monsters, m)
 }
 
 // settle sends a third of a new floor's monsters to sleep, until something wakes them.
@@ -440,6 +470,10 @@ func (w *World) turn(act func()) {
 	}
 	w.monstersAct()
 
+	if w.idle++; wanderEvery > 0 && w.idle >= wanderEvery && len(w.Monsters) < maxMonsters {
+		w.idle = 0
+		w.wander()
+	}
 	if w.Mana < w.MaxMana {
 		if w.manaIn++; w.manaIn >= manaEvery {
 			w.manaIn = 0

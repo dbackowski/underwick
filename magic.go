@@ -46,7 +46,7 @@ var spells = []*Spell{
 		w.say("The fire bolt hits the %s.", t.Name)
 		w.damage(t, 2+w.rng.IntN(4)+w.ExpLevel/2)
 	}},
-	{Name: "heal", Cost: 6, cast: func(w *World, dx, dy int) {
+	{Name: "heal", Cost: 8, cast: func(w *World, dx, dy int) {
 		p := w.Player
 		p.HP = min(p.MaxHP, p.HP+4+w.ExpLevel)
 		p.Poison = 0

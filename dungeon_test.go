@@ -164,3 +164,27 @@ func TestGeneratedFloorsArePlayable(t *testing.T) {
 		}
 	}
 }
+
+func TestWanderers(t *testing.T) {
+	w := NewWorld([]string{
+		"##################",
+		"#@...............#",
+		"#.......#........#",
+		"#.......#........#",
+		"##################",
+	})
+	for range wanderEvery - 1 {
+		w.Step(0, 0)
+	}
+	if len(w.Monsters) != 0 {
+		t.Fatal("no monster should wander in before its time")
+	}
+	w.Step(0, 0)
+	if len(w.Monsters) != 1 {
+		t.Fatalf("a monster should wander in after %d turns", wanderEvery)
+	}
+	m := w.Monsters[0]
+	if !m.hunting || abs(m.X-w.Player.X)+abs(m.Y-w.Player.Y) < 8 {
+		t.Fatalf("the wanderer should arrive at least 8 tiles off, already hunting, got %+v", m)
+	}
+}
