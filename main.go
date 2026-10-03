@@ -74,6 +74,8 @@ type Game struct {
 	turnTick int       // tick of the last turn, to time its animations
 	lastTurn int       // the world's turn count when the screen last looked
 	floats   []floater // HP changes rising off creatures
+	lookX    int       // the tile being looked at, in "look" mode
+	lookY    int
 }
 
 // loadSprites keys each sprite by its path under assets/ without extension, e.g. "Character/rat_idle_d_1".
@@ -179,8 +181,8 @@ func (g *Game) Update() error {
 			return ebiten.Termination
 		}
 		return nil
-	case "keys", "scores":
-		if justPressed(ebiten.KeyEscape, ebiten.KeySpace, ebiten.KeyEnter) {
+	case "keys", "scores", "log":
+		if justPressed(ebiten.KeyEscape, ebiten.KeySpace, ebiten.KeyEnter, ebiten.KeyM) {
 			g.mode = g.back
 		}
 		return nil
@@ -251,6 +253,12 @@ func (g *Game) Update() error {
 		g.mode = ""
 		g.afterAction()
 		return nil
+	case "look":
+		if justPressed(ebiten.KeyEscape, ebiten.KeyL) {
+			g.mode = ""
+		}
+		g.lookX, g.lookY = min(max(g.lookX+dx, 0), mapW-1), min(max(g.lookY+dy, 0), mapH-1)
+		return nil
 	case "aim":
 		if justPressed(ebiten.KeyEscape) {
 			g.mode, w.Log = "", nil
@@ -273,6 +281,12 @@ func (g *Game) Update() error {
 		g.mode = "drop"
 	case justPressed(ebiten.KeyEscape):
 		g.mode = "menu"
+		return nil
+	case justPressed(ebiten.KeyL):
+		g.mode, g.lookX, g.lookY = "look", w.Player.X, w.Player.Y
+		return nil
+	case justPressed(ebiten.KeyM):
+		g.back, g.mode = "", "log"
 		return nil
 	case justPressed(ebiten.KeyC):
 		if len(w.Spells) == 0 {
@@ -334,6 +348,7 @@ func (g *Game) Draw(out *ebiten.Image) {
 	}
 	if full := map[string]func(*ebiten.Image){
 		"title": g.drawTitle, "class": g.drawClasses, "menu": g.drawMenu, "keys": g.drawKeys, "scores": g.drawScores,
+		"log": g.drawLog,
 	}[g.mode]; full != nil {
 		g.labels = g.labels[:0] // the panel covers everything
 		full(screen)
@@ -453,8 +468,13 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 		}
 	}
 
-	// The camera keeps the hero centred as it moves, stopping at the floor's edges.
+	// The camera keeps the hero centred as it moves, or the tile being looked at, stopping at the
+	// floor's edges.
 	hx, hy := g.at(w.Player)
+	if g.mode == "look" {
+		hx, hy = float64(g.lookX*tile), float64(g.lookY*tile)
+		vector.StrokeRect(dst, float32(hx)+0.5, float32(hy)+0.5, tile-1, tile-1, 1, yellow, false)
+	}
 	cx := min(max(int(hx)-viewW/2*tile, 0), (mapW-viewW)*tile)
 	cy := min(max(int(hy)-viewH/2*tile, 0), (mapH-viewH)*tile)
 	screen.DrawImage(dst.SubImage(image.Rect(cx, cy, cx+viewW*tile, cy+viewH*tile)).(*ebiten.Image), nil)
@@ -491,7 +511,11 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 	g.label(fmt.Sprintf("$%d  Deep %d", w.Gold, w.Depth), 160, hud, yellow)
 
 	// Messages: this turn's events over two lines, dropping the oldest whole messages that don't fit.
-	lines := wrap(w.Log, screenW-4)
+	msgs := w.Log
+	if g.mode == "look" { // word by word, so a long description wraps
+		msgs = strings.Fields(w.Describe(g.lookX, g.lookY))
+	}
+	lines := wrap(msgs, screenW-4)
 	for i, l := range lines[max(0, len(lines)-2):] {
 		g.label(l, 2, float64((viewH+1)*tile+i*lineH), white)
 	}
@@ -563,15 +587,28 @@ func (g *Game) drawKeys(screen *ebiten.Image) {
 		{"", "or puts it on or off"},
 		{"X", "drop an item"},
 		{"C", "cast a spell, then aim it"},
+		{"L", "look around: move the cursor"},
+		{"M", "messages so far"},
 		{"Esc", "menu, or close a panel"},
 	} {
 		y := 5 + float64(i+1)*lineH + 4
 		g.label(l[0], 6, y, yellow)
 		g.label(l[1], 84, y, white)
 	}
-	g.label("Locked doors open with their key.", 6, 5+10*lineH+4, grey)
-	g.label("With a bow, moving at a monster shoots.", 6, 5+11*lineH+4, grey)
+	g.label("Locked doors open with their key.", 6, 5+12*lineH+4, grey)
+	g.label("With a bow, moving at a monster shoots.", 6, 5+13*lineH+4, grey)
 	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
+}
+
+// drawLog shows the latest messages of the run, newest at the bottom.
+func (g *Game) drawLog(screen *ebiten.Image) {
+	panel(screen, 2, 2, screenW-4, screenH-4)
+	g.label("Messages (Esc to close)", 6, 4, yellow)
+	h := g.world.History
+	fit := (screenH - 8 - lineH - 2) / lineH
+	for i, m := range h[max(0, len(h)-fit):] {
+		g.label(m, 6, 4+float64(i+1)*lineH+2, white)
+	}
 }
 
 // drawScores lists the best runs.

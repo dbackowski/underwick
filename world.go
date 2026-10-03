@@ -162,6 +162,7 @@ type World struct {
 	Hits     []Hit    // HP changes this turn, until the screen takes them, see TakeHits
 	Turn     int      // turns played, so the screen can tell an action from one that did nothing
 	Log      []string // what happened this step, in order, for the message line
+	History  []string // the last messages of the run, oldest first
 	Visible  [][]bool // tiles the player sees right now, by [y][x]
 	Seen     [][]bool // tiles the player has ever seen on this floor
 	Depth    int      // current floor, from 1 down without end
@@ -400,7 +401,54 @@ func (w *World) descend() {
 	}
 }
 
-func (w *World) say(format string, args ...any) { w.Log = append(w.Log, fmt.Sprintf(format, args...)) }
+// say reports something that happened, on the message line and in the history.
+func (w *World) say(format string, args ...any) {
+	m := fmt.Sprintf(format, args...)
+	w.Log = append(w.Log, m)
+	w.History = append(w.History, m)
+	if len(w.History) > maxHistory {
+		w.History = w.History[1:]
+	}
+}
+
+const maxHistory = 100
+
+// tileNames says what each tile is, for Describe.
+var tileNames = map[byte]string{
+	'#': "a wall", '.': "the floor", '>': "stairs down", '+': "a closed door", '/': "an open door",
+	'1': "an iron door, locked", '2': "a magic door, locked", '4': "an open iron door", '5': "an open magic door",
+	'&': "a chest", '0': "an empty chest", '~': "water", '=': "lava", '%': "acid", '^': "a pit",
+}
+
+// Describe says what the hero knows of a tile: what stands there, if in sight, what lies there and
+// the tile itself. A tile never seen is unknown.
+func (w *World) Describe(x, y int) string {
+	if !w.Seen[y][x] {
+		return "You haven't seen that."
+	}
+	var parts []string
+	if w.Visible[y][x] {
+		if x == w.Player.X && y == w.Player.Y {
+			parts = append(parts, "you")
+		} else if m := w.monsterAt(x, y); m != nil {
+			s := fmt.Sprintf("%s (%d/%d HP", m.Name, m.HP, m.MaxHP)
+			for _, st := range []struct {
+				on   bool
+				name string
+			}{{m.Sleep != 0, "asleep"}, {m.Confused > 0, "confused"}, {m.Poison > 0, "poisoned"}} {
+				if st.on {
+					s += ", " + st.name
+				}
+			}
+			parts = append(parts, s+")")
+		}
+	}
+	for _, it := range w.ItemsAt(x, y) {
+		parts = append(parts, w.ItemName(it))
+	}
+	parts = append(parts, tileNames[w.Level[y][x]])
+	return strings.Join(parts, ", ")
+}
 
 // record notes an action for the save, while the hero lives.
 func (w *World) record(a Action) {

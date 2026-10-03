@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -286,5 +287,37 @@ func TestTurnRecords(t *testing.T) {
 	}
 	if hs := w.TakeHits(); len(hs) != 1 || hs[0].Kind != 'p' {
 		t.Fatalf("poison should be recorded as poison, got %+v", hs)
+	}
+}
+
+func TestDescribeAndHistory(t *testing.T) {
+	w := NewWorld([]string{
+		"#######",
+		"#@.o.>#",
+		"#######",
+	})
+	orc := w.Monsters[0]
+	orc.Sleep = -1
+	w.Floor = append(w.Floor, &Item{ItemKind: goldKey, X: 2, Y: 1})
+	for x, want := range map[int]string{
+		1: "you, the floor",
+		2: "gold key, the floor",
+		3: fmt.Sprintf("orc (%d/%d HP, asleep), the floor", orc.HP, orc.MaxHP),
+		5: "stairs down",
+	} {
+		if got := w.Describe(x, 1); got != want {
+			t.Fatalf("looking at %d,1 should say %q, got %q", x, want, got)
+		}
+	}
+	w.Seen[1][5] = false
+	if got := w.Describe(5, 1); got != "You haven't seen that." {
+		t.Fatalf("an unseen tile should stay unknown, got %q", got)
+	}
+
+	for i := range maxHistory + 5 {
+		w.say("message %d", i)
+	}
+	if len(w.History) != maxHistory || w.History[maxHistory-1] != fmt.Sprintf("message %d", maxHistory+4) {
+		t.Fatalf("the history should keep the last %d messages, got %d", maxHistory, len(w.History))
 	}
 }
