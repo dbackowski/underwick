@@ -1,62 +1,105 @@
 package main
 
 import (
-	"math"
+	"bytes"
+	"embed"
+	"io"
+	"log"
 	"math/rand/v2"
+	"slices"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2/audio"
+	"github.com/hajimehoshi/ebiten/v2/audio/vorbis"
+	"github.com/hajimehoshi/ebiten/v2/audio/wav"
 )
 
 const sampleRate = 44100
 
+// The effects and music, all CC0 by Juhani Junkala: the effects from The Essential Retro Video Game Sound
+// Effects Collection, the music from Chiptune Adventures and the Retro Game Music Pack. An effect may
+// have numbered variants (hit1.wav, hit2.wav), one picked at random each time it plays.
+//
+//go:embed audio
+var audioFiles embed.FS
+
 var audioCtx *audio.Context // made in main, so tests need no sound device
 
-// note is one part of a sound: a square wave sliding from one pitch to another, or noise when from is 0.
-type note struct{ from, to, secs float64 }
+// sounds are the effects by name, decoded by loadSounds so playing one costs nothing.
+var sounds = map[string][][]byte{}
 
-// sounds are the game's effects as PCM, made at start in an 8-bit style, the art pack having no sounds.
-var sounds = map[string][]byte{}
-
-func init() {
-	for name, notes := range map[string][]note{
-		"hit":    {{0, 0, 0.04}, {300, 120, 0.06}},
-		"hurt":   {{160, 60, 0.15}},
-		"miss":   {{800, 1200, 0.04}},
-		"kill":   {{0, 0, 0.05}, {400, 60, 0.2}},
-		"die":    {{440, 220, 0.25}, {330, 165, 0.25}, {220, 55, 0.6}},
-		"shoot":  {{1200, 400, 0.08}},
-		"magic":  {{300, 900, 0.12}, {900, 1500, 0.1}},
-		"heal":   {{523, 523, 0.08}, {659, 659, 0.08}, {784, 784, 0.12}},
-		"stairs": {{392, 392, 0.1}, {330, 330, 0.1}, {262, 262, 0.1}, {196, 196, 0.2}},
-		"level":  {{523, 523, 0.08}, {659, 659, 0.08}, {784, 784, 0.08}, {1047, 1047, 0.2}},
-		"coin":   {{988, 988, 0.05}, {1319, 1319, 0.15}},
-		"pickup": {{600, 900, 0.06}},
-	} {
-		sounds[name] = synth(notes)
+func loadSounds() {
+	entries, err := audioFiles.ReadDir("audio")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, e := range entries {
+		name, ok := strings.CutSuffix(e.Name(), ".wav")
+		if !ok {
+			continue
+		}
+		b, err := audioFiles.ReadFile("audio/" + e.Name())
+		if err != nil {
+			log.Fatal(err)
+		}
+		s, err := wav.DecodeWithSampleRate(sampleRate, bytes.NewReader(b))
+		if err != nil {
+			log.Fatalf("%s: %v", e.Name(), err)
+		}
+		pcm, err := io.ReadAll(s)
+		if err != nil {
+			log.Fatalf("%s: %v", e.Name(), err)
+		}
+		name = strings.TrimRight(name, "0123456789")
+		sounds[name] = append(sounds[name], pcm)
 	}
 }
 
-// synth renders notes one after another as 16-bit little-endian stereo, each fading out as it plays.
-func synth(notes []note) []byte {
-	var b []byte
-	phase := 0.0
-	for _, n := range notes {
-		count := int(n.secs * sampleRate)
-		for i := range count {
-			t := float64(i) / float64(count)
-			v := rand.Float64()*2 - 1
-			if n.from != 0 {
-				phase += (n.from + (n.to-n.from)*t) / sampleRate
-				v = 1
-				if math.Mod(phase, 1) >= 0.5 {
-					v = -1
-				}
-			}
-			s := int16(v * (1 - t) * 0.15 * math.MaxInt16)
-			b = append(b, byte(s), byte(s>>8), byte(s), byte(s>>8))
-		}
+// areaTracks take turns floor by floor.
+var areaTracks = []string{"area1", "area2", "area3", "area4", "area5"}
+
+// track is the music for what is on screen: the title's, the ending once the hero is dead, the boss
+// track while a boss lives on the floor, or else the floor's own.
+func (g *Game) track() string {
+	w := g.world
+	switch {
+	case w == nil || g.mode == "title" || g.mode == "class":
+		return "title"
+	case w.Over:
+		return "ending"
+	case slices.ContainsFunc(w.Monsters, func(m *Entity) bool { return m.Boss }):
+		return "boss"
 	}
-	return b
+	return areaTracks[(w.Depth-1)%len(areaTracks)]
+}
+
+// playMusic starts the track for what is on screen, looping, if it isn't playing already.
+func (g *Game) playMusic() {
+	name := g.track()
+	if audioCtx == nil || name == g.tune {
+		return
+	}
+	if g.music != nil {
+		g.music.Close()
+	}
+	g.tune, g.music = name, nil
+	b, err := audioFiles.ReadFile("audio/" + name + ".ogg")
+	if err != nil {
+		log.Println("music:", err)
+		return
+	}
+	s, err := vorbis.DecodeWithSampleRate(sampleRate, bytes.NewReader(b))
+	if err != nil {
+		log.Println("music:", err)
+		return
+	}
+	g.music, err = audioCtx.NewPlayer(audio.NewInfiniteLoop(s, s.Length()))
+	if err != nil {
+		log.Println("music:", err)
+		return
+	}
+	g.music.SetVolume(0.5) // under the effects
+	g.music.Play()
 }
 
 // heard is what the hero had when the last turn's sounds played, to hear what changed since.
@@ -100,8 +143,8 @@ func (g *Game) playTurn(hs []Hit) map[string]bool {
 		}
 	}
 	for name, on := range play {
-		if on && audioCtx != nil {
-			audioCtx.NewPlayerFromBytes(sounds[name]).Play()
+		if vs := sounds[name]; on && audioCtx != nil && len(vs) > 0 {
+			audioCtx.NewPlayerFromBytes(vs[rand.IntN(len(vs))]).Play()
 		}
 	}
 	return play

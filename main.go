@@ -72,11 +72,13 @@ type Game struct {
 	place    int           // its place there, from 0, or -1
 	notice   string        // a problem to show on the title screen
 	tick     int
-	turnTick int       // tick of the last turn, to time its animations
-	lastTurn int       // the world's turn count when the screen last looked
-	floats   []floater // HP changes rising off creatures
-	heard    heard     // the hero's state when sounds last played
-	lookX    int       // the tile being looked at, in "look" mode
+	turnTick int           // tick of the last turn, to time its animations
+	lastTurn int           // the world's turn count when the screen last looked
+	floats   []floater     // HP changes rising off creatures
+	heard    heard         // the hero's state when sounds last played
+	music    *audio.Player // the music playing, see playMusic
+	tune     string        // its name
+	lookX    int           // the tile being looked at, in "look" mode
 	lookY    int
 }
 
@@ -159,6 +161,7 @@ func (g *Game) saveRun() {
 
 func (g *Game) Update() error {
 	g.tick++
+	g.playMusic()
 	if ebiten.IsWindowBeingClosed() { // closing the window saves, like quitting from the menu
 		g.saveRun()
 		return ebiten.Termination
@@ -863,6 +866,7 @@ func main() {
 	flag.Parse()
 	font = loadFont()
 	audioCtx = audio.NewContext(sampleRate)
+	loadSounds()
 	ebiten.SetWindowSize(screenW*scale, screenH*scale)
 	ebiten.SetWindowTitle("Underwick")
 	ebiten.SetWindowClosingHandled(true)

@@ -67,6 +67,8 @@ in; and a pit drops you to the next floor, with a fall. Take the stairs down to 
 when it dies: dragon, beholder, lord, cyclops, demon or reaper, stronger each time round. Its hoard, two
 fine items and gold, spills around the stairs.
 
+Each floor plays one of five tracks in turn, with its own track while a boss lives and another once you die.
+
 Your score is 100 per floor reached, 10 per kill, 50 per level gained, and your gold.
 
 ## Development
@@ -78,4 +80,7 @@ careful player as every class, and prints how deep they got, for tuning. The bot
 
 ## Credits
 
-Art by [Oryx Design Lab](https://www.oryxdesignlab.com).
+Art by [Oryx Design Lab](https://www.oryxdesignlab.com). Sound effects and music by Juhani Junkala, released
+under CC0 and kept in `audio/`: [The Essential Retro Video Game Sound Effects Collection](https://opengameart.org/content/512-sound-effects-8-bit-style),
+[Chiptune Adventures](https://opengameart.org/content/4-chiptunes-adventure) and the
+[Retro Game Music Pack](https://opengameart.org/content/5-chiptunes-action).

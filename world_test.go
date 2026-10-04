@@ -338,7 +338,31 @@ func TestTurnSounds(t *testing.T) {
 	}
 	w.Step(1, 0)
 	w.Step(1, 0)
-	if got := g.playTurn(w.TakeHits()); !got["stairs"] {
+	got := g.playTurn(w.TakeHits())
+	if !got["stairs"] {
 		t.Fatalf("going down the stairs should sound, got %v", got)
+	}
+
+	loadSounds()
+	for name := range got {
+		if len(sounds[name]) == 0 {
+			t.Errorf("the %s sound has no file", name)
+		}
+	}
+	for _, name := range append(areaTracks, "title", "boss", "ending") {
+		if _, err := audioFiles.Open("audio/" + name + ".ogg"); err != nil {
+			t.Errorf("the %s track has no file", name)
+		}
+	}
+	if got := g.track(); got != "area2" {
+		t.Fatalf("floor 2 should play area2, got %s", got)
+	}
+	w.Monsters = append(w.Monsters, &Entity{Kind: Kind{Boss: true}})
+	if got := g.track(); got != "boss" {
+		t.Fatalf("a living boss should play the boss track, got %s", got)
+	}
+	w.Over = true
+	if got := g.track(); got != "ending" {
+		t.Fatalf("death should play the ending, got %s", got)
 	}
 }
