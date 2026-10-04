@@ -321,3 +321,24 @@ func TestDescribeAndHistory(t *testing.T) {
 		t.Fatalf("the history should keep the last %d messages, got %d", maxHistory, len(w.History))
 	}
 }
+
+func TestTurnSounds(t *testing.T) {
+	w := NewWorld([]string{
+		"#####",
+		"#@o>#",
+		"#####",
+	})
+	orc := w.Monsters[0]
+	orc.Sleep, orc.HP = -1, 1 // a sleeper is always hit
+	g := &Game{world: w}
+	g.playTurn(nil)
+	w.Step(1, 0)
+	if got := g.playTurn(w.TakeHits()); !got["kill"] || got["hurt"] || got["stairs"] {
+		t.Fatalf("killing the orc should sound a kill and nothing else, got %v", got)
+	}
+	w.Step(1, 0)
+	w.Step(1, 0)
+	if got := g.playTurn(w.TakeHits()); !got["stairs"] {
+		t.Fatalf("going down the stairs should sound, got %v", got)
+	}
+}

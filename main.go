@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/colorm"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -74,6 +75,7 @@ type Game struct {
 	turnTick int       // tick of the last turn, to time its animations
 	lastTurn int       // the world's turn count when the screen last looked
 	floats   []floater // HP changes rising off creatures
+	heard    heard     // the hero's state when sounds last played
 	lookX    int       // the tile being looked at, in "look" mode
 	lookY    int
 }
@@ -301,14 +303,16 @@ func (g *Game) Update() error {
 	return nil
 }
 
-// afterAction starts the turn's animations, if the action took a turn, and floats its HP changes.
+// afterAction starts the turn's animations and sounds, if the action took a turn, and floats its HP changes.
 func (g *Game) afterAction() {
 	w := g.world
+	hs := w.TakeHits()
 	if w.Turn != g.lastTurn {
 		g.lastTurn, g.turnTick = w.Turn, g.tick
+		g.playTurn(hs)
 	}
 	stack := map[*Entity]int{}
-	for _, h := range w.TakeHits() {
+	for _, h := range hs {
 		s, c := fmt.Sprint(h.Amount), color.NRGBA{0xff, 0xff, 0xff, 0xff}
 		switch {
 		case h.Kind == 'm':
@@ -858,6 +862,7 @@ func (g *Game) Layout(int, int) (int, int) { return screenW * scale, screenH * s
 func main() {
 	flag.Parse()
 	font = loadFont()
+	audioCtx = audio.NewContext(sampleRate)
 	ebiten.SetWindowSize(screenW*scale, screenH*scale)
 	ebiten.SetWindowTitle("Underwick")
 	ebiten.SetWindowClosingHandled(true)
