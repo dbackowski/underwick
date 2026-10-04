@@ -71,6 +71,17 @@ Each floor plays one of five tracks in turn, with its own track while a boss liv
 
 Your score is 100 per floor reached, 10 per kill, 50 per level gained, and your gold.
 
+## Browser
+
+    GOOS=js GOARCH=wasm go build -o web/underwick.wasm .
+    cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/
+    python3 -m http.server -d web
+
+then open http://localhost:8000. To share it, put the `web/` folder on any static host (itch.io takes it zipped
+as an HTML5 game). The build embeds the sprites, which Oryx's license allows in a released game, so it stays
+out of git like `assets/`; never upload the `assets/` folder itself. Saving and high scores don't work in the
+browser yet.
+
 ## Development
 
 `go run . -shot frame.png` saves one rendered frame and exits, for checking rendering.
