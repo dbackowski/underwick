@@ -76,6 +76,7 @@ type Game struct {
 	lastTurn int                    // the world's turn count when the screen last looked
 	floats   []floater              // HP changes rising off creatures
 	drawn    map[*Entity][2]float64 // where each creature was drawn since the last turn, see at
+	pending  [2]int                 // a direction pressed mid-slide, taken when it ends, see pace
 	from     map[*Entity][2]float64 // where each was drawn when this turn began, to slide on from there
 	heard    heard                  // the hero's state when sounds last played
 	music    *audio.Player          // the music playing, see playMusic
@@ -127,19 +128,70 @@ func justPressed(keys ...ebiten.Key) bool {
 	return slices.ContainsFunc(keys, inpututil.IsKeyJustPressed)
 }
 
-// direction reads a just-pressed arrow key or WASD.
-func direction() (dx, dy int) {
-	switch {
-	case justPressed(ebiten.KeyArrowLeft, ebiten.KeyA):
-		return -1, 0
-	case justPressed(ebiten.KeyArrowRight, ebiten.KeyD):
-		return 1, 0
-	case justPressed(ebiten.KeyArrowUp, ebiten.KeyW):
-		return 0, -1
-	case justPressed(ebiten.KeyArrowDown, ebiten.KeyS):
-		return 0, 1
+// repeatDelay is how long, in ticks, a direction key is held before it repeats.
+const repeatDelay = 18
+
+// direction reads the arrow keys and WASD: a key just pressed, or else the latest pressed of those held
+// for repeatDelay or more, so pressing a second key while holding one turns. held is how many ticks the
+// key has been down, 1 for a fresh press, 0 for none; see steps.
+func direction() (dx, dy, held int) {
+	for _, d := range []struct {
+		keys   []ebiten.Key
+		dx, dy int
+	}{
+		{[]ebiten.Key{ebiten.KeyArrowLeft, ebiten.KeyA}, -1, 0},
+		{[]ebiten.Key{ebiten.KeyArrowRight, ebiten.KeyD}, 1, 0},
+		{[]ebiten.Key{ebiten.KeyArrowUp, ebiten.KeyW}, 0, -1},
+		{[]ebiten.Key{ebiten.KeyArrowDown, ebiten.KeyS}, 0, 1},
+	} {
+		for _, k := range d.keys {
+			switch t := inpututil.KeyPressDuration(k); {
+			case t == 1:
+				return d.dx, d.dy, 1
+			case t >= repeatDelay && (held == 0 || t < held):
+				dx, dy, held = d.dx, d.dy, t
+			}
+		}
 	}
-	return 0, 0
+	return dx, dy, held
+}
+
+// pace decides whether a direction read now acts, see steps. While playing, steps never overlap: a press
+// made mid-slide is kept and taken when the slide ends, so two keys pressed together step one after the
+// other rather than as one 2-tile glide.
+func (g *Game) pace(dx, dy, held int) (int, int) {
+	since := g.tick - g.turnTick
+	if !steps(held, since, g.mode == "") {
+		dx, dy = 0, 0
+	}
+	switch {
+	case g.mode != "":
+		g.pending = [2]int{}
+	case since < animTime && held == 1:
+		g.pending, dx, dy = [2]int{dx, dy}, 0, 0
+	case since >= animTime:
+		if dx == 0 && dy == 0 {
+			dx, dy = g.pending[0], g.pending[1]
+		}
+		g.pending = [2]int{}
+	}
+	return dx, dy
+}
+
+// steps reports whether a direction key down for held ticks acts now: when pressed, then once held for
+// repeatDelay, again each time the last turn's slide ends (sinceTurn ticks ago) while playing, so a held
+// walk is seamless and two held keys can't step twice in a blink, or every animTime elsewhere, like the
+// look cursor.
+func steps(held, sinceTurn int, playing bool) bool {
+	switch {
+	case held == 1:
+		return true
+	case held < repeatDelay:
+		return false
+	case playing:
+		return sinceTurn >= animTime
+	}
+	return (held-repeatDelay)%animTime == 0
 }
 
 // letter returns the index of a letter typed this frame, a being 0, if it is below n.
@@ -229,7 +281,7 @@ func (g *Game) Update() error {
 		}
 		return nil
 	}
-	dx, dy := direction()
+	dx, dy := g.pace(direction())
 
 	switch g.mode { // choosing: a letter picks, Escape gives up
 	case "use", "drop", "cast":
@@ -330,7 +382,10 @@ func (g *Game) afterAction() {
 	hs := w.TakeHits()
 	if w.Turn != g.lastTurn {
 		g.lastTurn, g.turnTick = w.Turn, g.tick
-		g.from, g.drawn = g.drawn, map[*Entity][2]float64{}
+		if len(g.drawn) > 0 { // with no frame drawn since the last turn, the creatures are still where it began
+			g.from = g.drawn
+		}
+		g.drawn = map[*Entity][2]float64{}
 		g.playTurn(hs)
 	}
 	stack := map[*Entity]int{}
@@ -657,14 +712,14 @@ func (g *Game) drawKeys(screen *ebiten.Image) {
 	panel(screen, 2, 2, screenW-4, screenH-4)
 	g.label("Keys", 6, 5, yellow)
 	for i, l := range [][2]string{
-		{"Arrows, WASD", "move, attack, open doors"},
+		{"Arrows, WASD", "move, attack; hold to walk"},
 		{"Space, .", "wait a turn"},
 		{"G", "pick up"},
 		{"I", "pack: a letter uses an item,"},
 		{"", "or puts it on or off"},
 		{"X", "drop an item"},
 		{"C", "cast a spell, then aim it"},
-		{"L", "look around: move the cursor"},
+		{"L", "look around with a cursor"},
 		{"M", "messages so far"},
 		{"Esc", "menu, or close a panel"},
 	} {
@@ -672,9 +727,10 @@ func (g *Game) drawKeys(screen *ebiten.Image) {
 		g.label(l[0], 6, y, yellow)
 		g.label(l[1], 84, y, white)
 	}
-	g.label("Locked doors open with their key.", 6, 5+12*lineH+4, grey)
-	g.label("With a bow, moving at a monster shoots.", 6, 5+13*lineH+4, grey)
-	g.label("Walk into a merchant to shop.", 6, 5+14*lineH+4, grey)
+	g.label("Walk into a door to open it. Locked doors", 6, 5+12*lineH+4, grey)
+	g.label("need their key.", 6, 5+13*lineH+4, grey)
+	g.label("With a bow, moving at a monster shoots.", 6, 5+14*lineH+4, grey)
+	g.label("Walk into a merchant to shop.", 6, 5+15*lineH+4, grey)
 	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
 }
 

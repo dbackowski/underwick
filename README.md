@@ -19,7 +19,7 @@ hero to start: the warrior (tough, with a sword), the archer (shoots with a bow)
 casts Fire Bolt), the thief (quiet, so sleeping monsters wake half as often) or the cleric (armoured,
 casts Heal).
 
-Arrow keys or WASD move and attack, space waits a turn, R chooses a new hero after death. G picks up
+Arrow keys or WASD move and attack (hold one to keep walking), space waits a turn, R chooses a new hero after death. G picks up
 what you stand on, I opens your pack (a letter uses, wears or takes off an item), X drops an item, C
 casts a spell (a letter picks it, then a direction aims it if it needs aiming), L looks around (move
 the cursor to see what is on a tile), M shows the last 100 messages, and Escape closes a

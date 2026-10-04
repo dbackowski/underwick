@@ -366,3 +366,52 @@ func TestTurnSounds(t *testing.T) {
 		t.Fatalf("death should play the ending, got %s", got)
 	}
 }
+
+func TestHeldKeys(t *testing.T) {
+	for _, c := range []struct {
+		held, sinceTurn int
+		playing, want   bool
+	}{
+		{1, 0, true, true},                       // a press always acts
+		{repeatDelay - 1, 99, true, false},       // a short hold doesn't repeat
+		{repeatDelay, animTime - 1, true, false}, // while playing, not mid-slide
+		{repeatDelay + 5, animTime, true, true},  // but as soon as the slide ends
+		{repeatDelay, 0, false, true},            // elsewhere, every animTime
+		{repeatDelay + 1, 99, false, false},
+		{repeatDelay + animTime, 0, false, true},
+	} {
+		if got := steps(c.held, c.sinceTurn, c.playing); got != c.want {
+			t.Errorf("held %d, %d ticks since the turn, playing %v: steps %v, want %v", c.held, c.sinceTurn, c.playing, got, c.want)
+		}
+	}
+}
+
+func TestPace(t *testing.T) {
+	g := &Game{tick: 100, turnTick: 95} // mid-slide
+	if dx, dy := g.pace(0, -1, 1); dx != 0 || dy != 0 {
+		t.Fatal("a press mid-slide should wait")
+	}
+	g.tick = 95 + animTime - 1
+	if dx, dy := g.pace(0, 0, 0); dx != 0 || dy != 0 {
+		t.Fatal("it should wait for the whole slide")
+	}
+	g.tick++
+	if dx, dy := g.pace(0, 0, 0); dx != 0 || dy != -1 {
+		t.Fatalf("it should step as the slide ends, got %d,%d", dx, dy)
+	}
+	if dx, dy := g.pace(0, 0, 0); dx != 0 || dy != 0 {
+		t.Fatal("it should step only once")
+	}
+	if dx, dy := g.pace(1, 0, 1); dx != 1 || dy != 0 {
+		t.Fatal("a press after the slide should step at once")
+	}
+
+	g.turnTick, g.mode = g.tick, ""
+	g.pace(1, 0, 1)
+	g.mode = "use"
+	g.pace(0, 0, 0)
+	g.mode, g.tick = "", g.tick+animTime
+	if dx, dy := g.pace(0, 0, 0); dx != 0 || dy != 0 {
+		t.Fatal("opening a panel should forget a waiting press")
+	}
+}
