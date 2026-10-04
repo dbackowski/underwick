@@ -21,7 +21,8 @@ casts Heal).
 
 Arrow keys or WASD move and attack, space waits a turn, R chooses a new hero after death. G picks up
 what you stand on, I opens your pack (a letter uses, wears or takes off an item), X drops an item, C
-casts a spell (a letter picks it, then a direction aims it if it needs aiming), and Escape closes a
+casts a spell (a letter picks it, then a direction aims it if it needs aiming), L looks around (move
+the cursor to see what is on a tile), M shows the last 100 messages, and Escape closes a
 panel or opens the menu, where you can see the keys and high scores or save and quit.
 
 Quitting, or closing the window, saves the run; continuing it deletes the save, and dying ends it for good.

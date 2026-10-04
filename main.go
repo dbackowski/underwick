@@ -511,12 +511,13 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 	g.label(fmt.Sprintf("$%d  Deep %d", w.Gold, w.Depth), 160, hud, yellow)
 
 	// Messages: this turn's events over two lines, dropping the oldest whole messages that don't fit.
-	msgs := w.Log
-	if g.mode == "look" { // word by word, so a long description wraps
-		msgs = strings.Fields(w.Describe(g.lookX, g.lookY))
+	lines := wrap(w.Log, screenW-4)
+	lines = lines[max(0, len(lines)-2):]
+	if g.mode == "look" { // word by word, so a long description wraps, keeping its start
+		lines = wrap(strings.Fields(w.Describe(g.lookX, g.lookY)), screenW-4)
+		lines = lines[:min(len(lines), 2)]
 	}
-	lines := wrap(msgs, screenW-4)
-	for i, l := range lines[max(0, len(lines)-2):] {
+	for i, l := range lines {
 		g.label(l, 2, float64((viewH+1)*tile+i*lineH), white)
 	}
 
@@ -606,8 +607,12 @@ func (g *Game) drawLog(screen *ebiten.Image) {
 	g.label("Messages (Esc to close)", 6, 4, yellow)
 	h := g.world.History
 	fit := (screenH - 8 - lineH - 2) / lineH
-	for i, m := range h[max(0, len(h)-fit):] {
-		g.label(m, 6, 4+float64(i+1)*lineH+2, white)
+	var lines []string
+	for _, m := range h[max(0, len(h)-fit):] { // each message takes a line at least
+		lines = append(lines, wrap(strings.Fields(m), screenW-12)...)
+	}
+	for i, l := range lines[max(0, len(lines)-fit):] {
+		g.label(l, 6, 4+float64(i+1)*lineH+2, white)
 	}
 }
 
