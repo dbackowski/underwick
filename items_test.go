@@ -112,7 +112,7 @@ func TestSpritesExist(t *testing.T) {
 		names = append(names, "World/"+w.ItemSprite(&Item{ItemKind: k}))
 	}
 	names = append(names, "World/"+gold.Sprite, "World/"+goldKey.Sprite, "World/"+blueKey.Sprite,
-		"Character/"+hero.Name+"_idle_d_1", "FX/arrow_x", "FX/arrow_y")
+		"Character/"+hero.Name+"_idle_d_1", "FX/arrow_x", "FX/arrow_y", "Character/dwarf_idle_d_1", "Character/dwarf_idle_d_2")
 	for _, c := range "#.>+/1425~=%^&0" {
 		names = append(names, "World/"+tileSprite(byte(c), themes[0], 1))
 	}
@@ -123,5 +123,53 @@ func TestSpritesExist(t *testing.T) {
 		if _, err := assets.Open("assets/" + n + ".png"); err != nil {
 			t.Errorf("missing sprite %s", n)
 		}
+	}
+}
+
+func TestShop(t *testing.T) {
+	w := NewWorld([]string{
+		"######",
+		"#@$..#",
+		"######",
+	})
+	if len(w.Wares) != wares {
+		t.Fatalf("a merchant should have %d wares, got %d", wares, len(w.Wares))
+	}
+	w.Buy(0)
+	if len(w.Wares) != wares || len(w.Inventory) != len(classes[0].Start) {
+		t.Fatal("buying without the gold should get nothing")
+	}
+
+	w.Gold, w.Found = 1000, 1000
+	it, price := w.Wares[0], w.Wares[0].Price()
+	w.Buy(0)
+	if w.Gold != 1000-price || w.Inventory[len(w.Inventory)-1] != it || len(w.Wares) != wares-1 {
+		t.Fatalf("buying should take %d gold and hand over the ware, have %d gold", price, w.Gold)
+	}
+	if w.Actions[len(w.Actions)-1] != (Action{Do: 'b', I: 0}) {
+		t.Fatal("buying should be recorded for the save")
+	}
+	if w.Score() != 100+w.Found {
+		t.Fatal("gold spent should still count for the score")
+	}
+
+	w.Gold, w.Player.HP, w.Player.Poison = 1000, 1, 3
+	w.Buy(buyHeal)
+	if w.Player.HP != w.Player.MaxHP || w.Player.Poison != 0 || w.Gold != 1000-2*(w.Player.MaxHP-1) {
+		t.Fatal("the merchant should heal and cure for 2 gold an HP")
+	}
+	heal := kindNamed("potion of healing")
+	w.Inventory = append(w.Inventory, &Item{ItemKind: heal}, &Item{ItemKind: heal})
+	gold := w.Gold
+	w.Buy(buyIdentify)
+	if !w.known[heal] || w.Gold != gold-25 {
+		t.Fatal("the merchant should name an unknown kind for 25 gold")
+	}
+
+	w.Player.X = 4
+	gold = w.Gold
+	w.Buy(0)
+	if w.Gold != gold {
+		t.Fatal("buying away from the merchant should do nothing")
 	}
 }

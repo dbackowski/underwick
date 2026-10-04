@@ -224,6 +224,7 @@ func (w *World) pickUpGold() {
 	w.Floor = slices.DeleteFunc(w.Floor, func(it *Item) bool {
 		if it.ItemKind == gold && it.X == p.X && it.Y == p.Y {
 			w.Gold += it.Amount
+			w.Found += it.Amount
 			w.say("You pick up %d gold.", it.Amount)
 			return true
 		}

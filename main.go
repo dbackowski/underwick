@@ -258,6 +258,19 @@ func (g *Game) Update() error {
 		g.mode = ""
 		g.afterAction()
 		return nil
+	case "shop": // a letter buys: the wares, then healing, then identifying
+		if justPressed(ebiten.KeyEscape) {
+			g.mode = ""
+		} else if i, ok := letter(len(w.Wares) + 2); ok {
+			switch i - len(w.Wares) {
+			case 0:
+				i = buyHeal
+			case 1:
+				i = buyIdentify
+			}
+			w.Buy(i)
+		}
+		return nil
 	case "look":
 		if justPressed(ebiten.KeyEscape, ebiten.KeyL) {
 			g.mode = ""
@@ -276,6 +289,9 @@ func (g *Game) Update() error {
 	}
 
 	switch {
+	case (dx != 0 || dy != 0) && w.Level[w.Player.Y+dy][w.Player.X+dx] == '$':
+		g.mode, w.Log = "shop", nil
+		return nil
 	case dx != 0 || dy != 0, justPressed(ebiten.KeySpace, ebiten.KeyPeriod):
 		w.Step(dx, dy)
 	case justPressed(ebiten.KeyG):
@@ -393,8 +409,12 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 				continue
 			}
 			alpha := dim(w, x, y)
-			if c != '#' { // doors, liquids and chests sit on floor
+			if c != '#' { // doors, liquids, chests and the merchant sit on floor
 				g.draw(dst, "World/floor_"+theme.floor, x, y, alpha)
+			}
+			if c == '$' {
+				g.draw(dst, fmt.Sprintf("Character/dwarf_idle_d_%d", g.tick/20%2+1), x, y, alpha)
+				continue
 			}
 			g.draw(dst, "World/"+tileSprite(byte(c), theme, g.tick/30%2+1), x, y, alpha)
 		}
@@ -532,6 +552,9 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 	case g.mode == "use", g.mode == "drop":
 		g.labels = g.labels[:0] // the panel covers the HUD and messages
 		g.drawInventory(screen)
+	case g.mode == "shop":
+		g.labels = g.labels[:0]
+		g.drawShop(screen)
 	case g.mode == "cast":
 		g.labels = g.labels[:0]
 		g.drawSpells(screen)
@@ -648,6 +671,7 @@ func (g *Game) drawKeys(screen *ebiten.Image) {
 	}
 	g.label("Locked doors open with their key.", 6, 5+12*lineH+4, grey)
 	g.label("With a bow, moving at a monster shoots.", 6, 5+13*lineH+4, grey)
+	g.label("Walk into a merchant to shop.", 6, 5+14*lineH+4, grey)
 	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
 }
 
@@ -771,6 +795,43 @@ func (g *Game) drawInventory(screen *ebiten.Image) {
 		}
 		g.label(label, 18, y, white)
 	}
+}
+
+// drawShop lists the merchant's wares and services, lettered, with their prices.
+func (g *Game) drawShop(screen *ebiten.Image) {
+	w := g.world
+	panel(screen, 2, 2, screenW-4, screenH-4)
+	g.label(fmt.Sprintf("The merchant's wares. You have %d gold.", w.Gold), 6, 4, yellow)
+	y := 4.0
+	row := func(i int, sprite, name string, price int) {
+		y += lineH + 2
+		if sprite != "" {
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Scale(0.75, 0.75) // the 12px sprite in a 9px line
+			op.GeoM.Translate(6, y-1)
+			screen.DrawImage(g.sprite("World/"+sprite), op)
+		}
+		c := white
+		if price > w.Gold {
+			c = grey
+		}
+		g.label(fmt.Sprintf("%c) %d", 'a'+i, price), 18, y, c)
+		g.label(name, 56, y, c)
+	}
+	for i, it := range w.Wares {
+		row(i, w.ItemSprite(it), w.ItemName(it), it.Price())
+	}
+	if len(w.Wares) == 0 {
+		y += lineH + 2
+		g.label("Sold out.", 18, y, grey)
+	}
+	y += 4
+	row(len(w.Wares), "", "heal your wounds", w.HealPrice())
+	row(len(w.Wares)+1, "", "name your potions and scrolls", w.IdentifyPrice())
+	if len(w.Log) > 0 {
+		g.label(w.Log[len(w.Log)-1], 6, screenH-4-2*lineH-4, yellow)
+	}
+	g.label("Esc to leave.", 6, screenH-4-lineH-2, grey)
 }
 
 // wrap packs messages into lines no wider than width, never splitting one message across lines.

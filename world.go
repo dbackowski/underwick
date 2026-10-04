@@ -109,9 +109,9 @@ func (k Kind) at(depth int) Kind {
 // Tiles, besides '#' wall, '.' floor and '>' stairs down, as generate draws them. A locked door
 // opens to its own open form: iron '1' to '4' with a gold key, magic '2' to '5' with a blue key.
 // An opened chest '&' becomes '0'.
-func blocksSight(c byte) bool { return strings.IndexByte("#+12", c) >= 0 }  // walls and closed doors
-func solid(c byte) bool       { return strings.IndexByte("#+12&", c) >= 0 } // and chests: nothing stands there
-func hazard(c byte) bool      { return strings.IndexByte("~=%^", c) >= 0 }  // water, lava, acid, pits
+func blocksSight(c byte) bool { return strings.IndexByte("#+12", c) >= 0 }   // walls and closed doors
+func solid(c byte) bool       { return strings.IndexByte("#+12&$", c) >= 0 } // and chests and the merchant: nothing stands there
+func hazard(c byte) bool      { return strings.IndexByte("~=%^", c) >= 0 }   // water, lava, acid, pits
 
 type Entity struct {
 	Kind
@@ -170,12 +170,14 @@ type World struct {
 	ExpLevel int // the hero's experience level, from 1
 	XP       int // experience toward the next level
 	Gold     int
+	Found    int      // all the gold the hero has picked up, spent or not, for the score
 	Over     bool     // the hero is dead
 	Cause    string   // what killed it, e.g. "an orc" or "lava"
 	Actions  []Action // everything the hero did this run, for saving
 
 	Inventory []*Item
 	Floor     []*Item // items lying on this floor
+	Wares     []*Item // what this floor's merchant sells, if it has one
 
 	Class         *Class
 	Spells        []*Spell
@@ -223,6 +225,7 @@ func newRun(rng *rand.Rand, c *Class) *World {
 func (w *World) load(level []string) {
 	w.Monsters, w.Floor = nil, nil
 	var spots [][2]int
+	shop := false
 	rows := make([][]byte, len(level))
 	for y, row := range level {
 		rows[y] = []byte(row)
@@ -238,6 +241,9 @@ func (w *World) load(level []string) {
 					k = blueKey
 				}
 				w.Floor = append(w.Floor, &Item{ItemKind: k, X: x, Y: y})
+			case '$':
+				shop = true
+				continue // the merchant stays on the map, as a tile
 			default:
 				k, ok := kinds[c]
 				if !ok {
@@ -254,6 +260,10 @@ func (w *World) load(level []string) {
 	}
 	w.Seen = grid(level)
 	w.stockItems(spots)
+	w.Wares = nil
+	if shop {
+		w.stockWares()
+	}
 	w.idle = 0
 	w.Player.FromX, w.Player.FromY = w.Player.X, w.Player.Y // arrive, rather than slide across the map
 	w.updateFOV()
@@ -347,7 +357,7 @@ func NewGame(seed uint64, c *Class) *World {
 }
 
 // Score counts how deep the hero got, how much it killed, the level it reached and its gold.
-func (w *World) Score() int { return 100*w.Depth + 10*w.Kills + 50*(w.ExpLevel-1) + w.Gold }
+func (w *World) Score() int { return 100*w.Depth + 10*w.Kills + 50*(w.ExpLevel-1) + w.Found }
 
 // xpFor is the experience it takes to go from level l to l+1. It grows with the square of the level:
 // with a gentler curve the hero outgrows the monsters and a good run never ends.
@@ -417,7 +427,7 @@ const maxHistory = 100
 var tileNames = map[byte]string{
 	'#': "a wall", '.': "the floor", '>': "stairs down", '+': "a closed door", '/': "an open door",
 	'1': "an iron door, locked", '2': "a magic door, locked", '4': "an open iron door", '5': "an open magic door",
-	'&': "a chest", '0': "an empty chest", '~': "water", '=': "lava", '%': "acid", '^': "a pit",
+	'&': "a chest", '0': "an empty chest", '$': "a merchant", '~': "water", '=': "lava", '%': "acid", '^': "a pit",
 }
 
 // Describe says what the hero knows of a tile: what stands there, if in sight, what lies there and

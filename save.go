@@ -20,12 +20,12 @@ var dataDir = func() string {
 }()
 
 // saveVersion goes up whenever a change to the rules would replay an old save differently.
-const saveVersion = 2
+const saveVersion = 3
 
 // Action is one thing the hero did, enough to do it again: a save is the run's seed, class and actions,
 // replayed on load. The game draws all its chance from the seed, so a replay ends where the run left.
 type Action struct {
-	Do      byte // 'm' move or wait, 'g' pick up, 'u' use, 'd' drop, 'c' cast
+	Do      byte // 'm' move or wait, 'g' pick up, 'u' use, 'd' drop, 'c' cast, 'b' buy
 	I, X, Y int  // the item or spell, and the direction
 }
 
@@ -88,6 +88,8 @@ func Continue() (*World, error) {
 			w.Drop(a.I)
 		case 'c':
 			w.Cast(a.I, a.X, a.Y)
+		case 'b':
+			w.Buy(a.I)
 		}
 	}
 	w.Log = []string{"Welcome back."}

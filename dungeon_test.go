@@ -160,6 +160,12 @@ func TestGeneratedFloorsArePlayable(t *testing.T) {
 				if (c == '(' || c == ')') && !seen[i] {
 					fail("a key is out of reach")
 				}
+				if c == '$' && !seen[i] {
+					fail("the merchant is out of reach")
+				}
+			}
+			if want := shopFloor(depth, boss); want != (strings.Count(all, "$") == 1) || strings.Count(all, "$") > 1 {
+				fail("a shop floor should have one merchant, and others none")
 			}
 		}
 	}

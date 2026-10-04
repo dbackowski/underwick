@@ -38,12 +38,14 @@ func (r room) ring() [][4]int {
 //	*  an item        (  gold key          )  blue key         &  chest
 //	+  door           1  iron door, locked (gold key)          2  magic door, locked (blue key)
 //	~  deep water     =  lava              %  acid             ^  pit
+//	$  the merchant
 //
 // and a kind letter for each monster. Rooms are joined by corridors, often through doors. The hero
 // starts in the first room and the stairs are in the room farthest from it; with a boss (its kind
 // character, or 0 for none) the boss takes the stairs' place, and they open when it dies. A dead-end
 // room may be a locked vault with a chest, its key elsewhere on the floor. Other rooms may hold a
-// pool of water, acid, lava or pits, always leaving the room's edge walkable.
+// pool of water, acid, lava or pits, always leaving the room's edge walkable. On a shop floor (see
+// shopFloor) a merchant stands in the middle of a room with no pool.
 func generate(rng *rand.Rand, depth int, boss byte) []string {
 	for {
 		g := make([][]byte, mapH)
@@ -124,10 +126,17 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 			}
 		}
 
+		shop := -1
+		for i := 1; i < len(rooms) && shop < 0 && shopFloor(depth, boss); i++ {
+			if i != far && i != vault {
+				shop = i
+			}
+		}
+
 		// Hazard pools fill parts of rooms' insides, never their edges, so every entrance still
 		// connects to every other along the edge.
 		for i, r := range rooms {
-			if i == 0 || i == far || i == vault || rng.IntN(3) > 0 {
+			if i == 0 || i == far || i == vault || rng.IntN(3) > 0 || i == shop {
 				continue
 			}
 			pool := "~"
@@ -151,6 +160,10 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 		}
 
 		g[sy][sx] = '@'
+		if shop >= 0 {
+			mx, my := rooms[shop].center()
+			g[my][mx] = '$'
+		}
 		fx, fy := rooms[far].center()
 		g[fy][fx] = '>'
 		if boss != 0 {
@@ -212,13 +225,14 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 	}
 }
 
-// walkable maps the tiles reachable from x, y without crossing walls, locked doors, chests or hazards.
+// walkable maps the tiles reachable from x, y without crossing walls, locked doors, chests, the merchant
+// or hazards.
 func walkable(tile func(x, y int) byte, x, y int) map[[2]int]bool {
 	seen := map[[2]int]bool{{x, y}: true}
 	for queue := [][2]int{{x, y}}; len(queue) > 0; queue = queue[1:] {
 		for _, d := range dirs {
 			n := [2]int{queue[0][0] + d[0], queue[0][1] + d[1]}
-			if c := tile(n[0], n[1]); !seen[n] && !hazard(c) && !strings.ContainsRune("#12&", rune(c)) {
+			if c := tile(n[0], n[1]); !seen[n] && !hazard(c) && !strings.ContainsRune("#12&$", rune(c)) {
 				seen[n] = true
 				queue = append(queue, n)
 			}

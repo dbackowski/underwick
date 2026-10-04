@@ -69,7 +69,11 @@ fine items and gold, spills around the stairs.
 
 Each floor plays one of five tracks in turn, with its own track while a boss lives and another once you die.
 
-Your score is 100 per floor reached, 10 per kill, 50 per level gained, and your gold.
+Every 3rd floor from the 2nd, unless a boss guards it, a merchant (the dwarf) keeps shop in one of the rooms.
+Walk into the merchant to buy one of five wares, as good as a vault's, or pay to be healed (2 gold an HP, poison
+cured too) or to have your potions and scrolls named (25 gold a kind). Shopping takes no time.
+
+Your score is 100 per floor reached, 10 per kill, 50 per level gained, and all the gold you found, spent or not.
 
 ## Browser
 
