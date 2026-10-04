@@ -73,9 +73,16 @@ func (g *Game) track() string {
 	return areaTracks[(w.Depth-1)%len(areaTracks)]
 }
 
-// playMusic starts the track for what is on screen, looping, if it isn't playing already.
+// soundLevels are what V cycles through: all sound, effects only, or none.
+var soundLevels = []string{"Sound on.", "Music off.", "Sound off."}
+
+// playMusic starts the track for what is on screen, looping, if it isn't playing already, or stops the
+// music while it is turned off.
 func (g *Game) playMusic() {
 	name := g.track()
+	if g.sound > 0 {
+		name = ""
+	}
 	if audioCtx == nil || name == g.tune {
 		return
 	}
@@ -83,6 +90,9 @@ func (g *Game) playMusic() {
 		g.music.Close()
 	}
 	g.tune, g.music = name, nil
+	if name == "" {
+		return
+	}
 	b, err := audioFiles.ReadFile("audio/" + name + ".ogg")
 	if err != nil {
 		log.Println("music:", err)
@@ -143,7 +153,7 @@ func (g *Game) playTurn(hs []Hit) map[string]bool {
 		}
 	}
 	for name, on := range play {
-		if vs := sounds[name]; on && audioCtx != nil && len(vs) > 0 {
+		if vs := sounds[name]; on && audioCtx != nil && len(vs) > 0 && g.sound < 2 {
 			audioCtx.NewPlayerFromBytes(vs[rand.IntN(len(vs))]).Play()
 		}
 	}

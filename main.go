@@ -77,6 +77,7 @@ type Game struct {
 	floats   []floater              // HP changes rising off creatures
 	drawn    map[*Entity][2]float64 // where each creature was drawn since the last turn, see at
 	pending  [2]int                 // a direction pressed mid-slide, taken when it ends, see pace
+	sound    int                    // which of soundLevels is on, from 0
 	from     map[*Entity][2]float64 // where each was drawn when this turn began, to slide on from there
 	heard    heard                  // the hero's state when sounds last played
 	music    *audio.Player          // the music playing, see playMusic
@@ -215,6 +216,12 @@ func (g *Game) saveRun() {
 
 func (g *Game) Update() error {
 	g.tick++
+	if justPressed(ebiten.KeyV) { // anywhere, so the music can be stopped from the title screen
+		g.sound = (g.sound + 1) % len(soundLevels)
+		if g.notice = soundLevels[g.sound]; g.world != nil {
+			g.world.Log = []string{g.notice}
+		}
+	}
 	g.playMusic()
 	if ebiten.IsWindowBeingClosed() { // closing the window saves, like quitting from the menu
 		g.saveRun()
@@ -722,15 +729,16 @@ func (g *Game) drawKeys(screen *ebiten.Image) {
 		{"L", "look around with a cursor"},
 		{"M", "messages so far"},
 		{"Esc", "menu, or close a panel"},
+		{"V", "sound: all, effects, none"},
 	} {
 		y := 5 + float64(i+1)*lineH + 4
 		g.label(l[0], 6, y, yellow)
 		g.label(l[1], 84, y, white)
 	}
-	g.label("Walk into a door to open it. Locked doors", 6, 5+12*lineH+4, grey)
-	g.label("need their key.", 6, 5+13*lineH+4, grey)
-	g.label("With a bow, moving at a monster shoots.", 6, 5+14*lineH+4, grey)
-	g.label("Walk into a merchant to shop.", 6, 5+15*lineH+4, grey)
+	g.label("Walk into a door to open it. Locked doors", 6, 5+13*lineH+4, grey)
+	g.label("need their key.", 6, 5+14*lineH+4, grey)
+	g.label("With a bow, moving at a monster shoots.", 6, 5+15*lineH+4, grey)
+	g.label("Walk into a merchant to shop.", 6, 5+16*lineH+4, grey)
 	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
 }
 
