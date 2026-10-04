@@ -72,13 +72,15 @@ type Game struct {
 	place    int           // its place there, from 0, or -1
 	notice   string        // a problem to show on the title screen
 	tick     int
-	turnTick int           // tick of the last turn, to time its animations
-	lastTurn int           // the world's turn count when the screen last looked
-	floats   []floater     // HP changes rising off creatures
-	heard    heard         // the hero's state when sounds last played
-	music    *audio.Player // the music playing, see playMusic
-	tune     string        // its name
-	lookX    int           // the tile being looked at, in "look" mode
+	turnTick int                    // tick of the last turn, to time its animations
+	lastTurn int                    // the world's turn count when the screen last looked
+	floats   []floater              // HP changes rising off creatures
+	drawn    map[*Entity][2]float64 // where each creature was drawn since the last turn, see at
+	from     map[*Entity][2]float64 // where each was drawn when this turn began, to slide on from there
+	heard    heard                  // the hero's state when sounds last played
+	music    *audio.Player          // the music playing, see playMusic
+	tune     string                 // its name
+	lookX    int                    // the tile being looked at, in "look" mode
 	lookY    int
 }
 
@@ -328,6 +330,7 @@ func (g *Game) afterAction() {
 	hs := w.TakeHits()
 	if w.Turn != g.lastTurn {
 		g.lastTurn, g.turnTick = w.Turn, g.tick
+		g.from, g.drawn = g.drawn, map[*Entity][2]float64{}
 		g.playTurn(hs)
 	}
 	stack := map[*Entity]int{}
@@ -903,37 +906,58 @@ func saveShot(screen *ebiten.Image, path string) {
 	os.Exit(0)
 }
 
-// drawEntity draws a creature in its current animation frame, over a 1px outline of the given colour.
-// at is where a creature is drawn this frame, in floor pixels: sliding over from where it began the
-// turn (unless it jumped, like a teleport), and lunging halfway at whatever it struck in melee.
-func (g *Game) at(e *Entity) (float64, float64) {
-	x, y := float64(e.X*tile), float64(e.Y*tile)
+// at is where a creature is drawn this frame, in floor pixels: sliding over from where it was drawn as the
+// turn began, so a move made before the last one finished carries on from mid-slide, and lunging halfway
+// at whatever it struck in melee. A creature that jumped further than 2 tiles, by teleport or onto a
+// new floor, appears at once.
+func (g *Game) at(e *Entity) (x, y float64) {
+	x, y = float64(e.X*tile), float64(e.Y*tile)
+	defer func() {
+		x, y = math.Round(x), math.Round(y) // whole art pixels, so the camera and the sprite never disagree by one
+		if g.drawn == nil {
+			g.drawn = map[*Entity][2]float64{}
+		}
+		g.drawn[e] = [2]float64{x, y}
+	}()
 	t := float64(g.tick-g.turnTick) / animTime
 	if t >= 1 {
 		return x, y
 	}
-	if d := abs(e.X-e.FromX) + abs(e.Y-e.FromY); d > 0 && d <= 2 {
-		fx, fy := float64(e.FromX*tile), float64(e.FromY*tile)
-		x, y = fx+(x-fx)*t, fy+(y-fy)*t
+	f, ok := g.from[e]
+	if !ok {
+		f = [2]float64{float64(e.FromX * tile), float64(e.FromY * tile)}
+	}
+	if math.Abs(x-f[0])+math.Abs(y-f[1]) <= 2*tile {
+		x, y = f[0]+(x-f[0])*t, f[1]+(y-f[1])*t
 	}
 	l := math.Sin(math.Pi*t) * tile / 2
 	return x + float64(e.Lunge[0])*l, y + float64(e.Lunge[1])*l
 }
 
+// walkFrames are where each direction's two walking frames really are: the Oryx pack files them under
+// the wrong directions, the same way for every creature.
+var walkFrames = map[string][2]string{"d": {"r_2", "u_2"}, "r": {"r_1", "u_1"}, "l": {"d_2", "l_2"}, "u": {"d_1", "l_1"}}
+
+// drawEntity draws a creature in its current animation frame, over a 1px outline of the given colour.
+
 func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, outline color.RGBA) {
 	since := g.tick - g.turnTick
-	anim, frame := e.Anim, since/(animTime/2)%2+1
-	if since >= animTime {
-		anim, frame = "idle", g.tick/20%2+1
+	// Steps alternate on the clock rather than the turn, so quick moves still stride.
+	pose := fmt.Sprintf("%s_%s_%d", e.Anim, e.Dir, since/(animTime/2)%2+1)
+	switch {
+	case since >= animTime:
+		pose = fmt.Sprintf("idle_%s_%d", e.Dir, g.tick/20%2+1)
+	case e.Anim == "walk":
+		pose = "walk_" + walkFrames[e.Dir][g.tick/(animTime/2)%2]
 	}
 	px, py := g.at(e)
 	if e.Boss { // 24px sprite centred on its one tile, spilling over the neighbours
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Translate(px-tile/2, py-tile/2)
-		dst.DrawImage(g.sprite(fmt.Sprintf("Bosses/%s_%s_%s_%d", e.Name, anim, e.Dir, frame)), op)
+		dst.DrawImage(g.sprite("Bosses/"+e.Name+"_"+pose), op)
 		return
 	}
-	name := fmt.Sprintf("Character/%s_%s_%s_%d", e.Name, anim, e.Dir, frame)
+	name := "Character/" + e.Name + "_" + pose
 	// A silhouette in the outline colour, shifted 1px each way, then the sprite over it.
 	var cm colorm.ColorM
 	cm.Scale(0, 0, 0, float64(outline.A)/0xff)

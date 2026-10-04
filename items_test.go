@@ -1,6 +1,8 @@
 package main
 
 import (
+	"image"
+	"image/png"
 	"slices"
 	"strings"
 	"testing"
@@ -171,5 +173,46 @@ func TestShop(t *testing.T) {
 	w.Buy(0)
 	if w.Gold != gold {
 		t.Fatal("buying away from the merchant should do nothing")
+	}
+}
+
+// TestWalkFrames checks walkFrames against the art: each hero's walking frames for a direction should look
+// most like its idle frame facing that way.
+func TestWalkFrames(t *testing.T) {
+	load := func(name string) image.Image {
+		f, err := assets.Open("assets/Character/" + name + ".png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		img, err := png.Decode(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return img
+	}
+	differ := func(a, b image.Image) int {
+		n := 0
+		for y := range tile {
+			for x := range tile {
+				if a.At(x, y) != b.At(x, y) {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	for _, c := range classes {
+		for dir, frames := range walkFrames {
+			for _, f := range frames {
+				walk := load(c.Name + "_walk_" + f)
+				closest := slices.MinFunc([]string{"d", "r", "l", "u"}, func(a, b string) int {
+					return differ(walk, load(c.Name+"_idle_"+a+"_1")) - differ(walk, load(c.Name+"_idle_"+b+"_1"))
+				})
+				if closest != dir {
+					t.Errorf("%s walking %s shows walk_%s, which faces %s", c.Name, dir, f, closest)
+				}
+			}
+		}
 	}
 }
