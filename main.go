@@ -536,15 +536,58 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 		g.labels = g.labels[:0]
 		g.drawSpells(screen)
 	case w.Over && g.mode == "":
-		panel(screen, 8, 56, screenW-16, 4*lineH+8)
-		g.label(fmt.Sprintf("Killed by %s on depth %d.", w.Cause, w.Depth), 14, 60, white)
-		place := ""
-		if g.recorded && g.place >= 0 {
-			place = fmt.Sprintf(", number %d!", g.place+1)
-		}
-		g.label(fmt.Sprintf("Score %d%s", w.Score(), place), 14, 60+lineH, yellow)
-		g.label("R: a new hero.  Esc: title screen.", 14, 60+2*lineH+4, grey)
+		g.labels = g.labels[:0] // the recap covers everything
+		g.drawRecap(screen)
 	}
+}
+
+// drawRecap sums up the dead hero's run: how it ended, how far it got, what it had, and its last messages.
+func (g *Game) drawRecap(screen *ebiten.Image) {
+	w, p := g.world, g.world.Player
+	panel(screen, 2, 2, screenW-4, screenH-4)
+	y := 4.0
+	para := func(parts []string, c color.Color) { // wrapped between parts, never inside one
+		for _, l := range wrap(parts, screenW-12) {
+			g.label(l, 6, y, c)
+			y += lineH
+		}
+	}
+	place := ""
+	if g.recorded && g.place >= 0 {
+		place = fmt.Sprintf(" (number %d)", g.place+1)
+	}
+	var gear []string
+	for _, it := range w.Inventory {
+		if it.Worn {
+			gear = append(gear, w.ItemName(it)+",")
+		}
+	}
+	if len(gear) == 0 {
+		gear = []string{"nothing."}
+	}
+	gear[len(gear)-1] = strings.TrimSuffix(gear[len(gear)-1], ",") + "."
+
+	para([]string{fmt.Sprintf("Killed by %s on depth %d.", w.Cause, w.Depth)}, yellow)
+	para([]string{fmt.Sprintf("A level %d %s,", w.ExpLevel, w.Class.Name), fmt.Sprintf("after %d turns.", w.Turn)}, white)
+	para([]string{fmt.Sprintf("Score %d%s,", w.Score(), place), fmt.Sprintf("%d kills,", w.Kills), fmt.Sprintf("%d gold.", w.Gold)}, white)
+	para([]string{fmt.Sprintf("Max HP %d,", p.MaxHP), fmt.Sprintf("accuracy %d,", p.Atk), fmt.Sprintf("damage 1-%d,", p.Dmg), fmt.Sprintf("armour %d.", p.Def)}, white)
+	y += 4
+	para(append([]string{"Using"}, gear...), grey)
+	y += 4
+
+	g.label("Last messages", 6, y, yellow)
+	y += lineH
+	var lines []string
+	fit := int((screenH-6-lineH-2-y)/lineH) - 1 // above the keys, with a line between
+	h := w.History
+	for _, m := range h[max(0, len(h)-fit):] {
+		lines = append(lines, wrap(strings.Fields(m), screenW-12)...)
+	}
+	for _, l := range lines[max(0, len(lines)-fit):] {
+		g.label(l, 6, y, white)
+		y += lineH
+	}
+	g.label("R: a new hero.  Esc: title screen.", 6, screenH-4-lineH-2, grey)
 }
 
 // drawTitle is the first screen: the name, and where to go from here.
