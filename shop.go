@@ -3,15 +3,16 @@ package main
 import "slices"
 
 const (
-	shopEvery = 3 // a merchant keeps shop every 3rd floor from the 2nd, though not beside a boss
-	wares     = 5 // what a merchant has for sale
+	wares = 5 // what a merchant has for sale
 
 	// Buy takes these for the merchant's services, in place of a ware's index.
 	buyHeal     = -1
 	buyIdentify = -2
 )
 
-func shopFloor(depth int, boss byte) bool { return boss == 0 && depth%shopEvery == 2 }
+// shopFloor says whether a merchant keeps shop on a floor: the one before each boss's, so the hero
+// arrives with a few floors' gold and something to spend it on.
+func shopFloor(depth int) bool { return depth%bossEvery == bossEvery-1 }
 
 // stockWares fills the merchant's shop, with items as good as a vault's chest holds.
 func (w *World) stockWares() {
@@ -21,7 +22,10 @@ func (w *World) stockWares() {
 }
 
 // Price is what the merchant asks for an item: more for deeper kinds and enchantments, and tomes most.
-// ponytail: a flat formula; tune it once played runs show how much gold the hero has at each shop
+// It is set against the gold the balance simulation's careful bots carry to a merchant: a median of about
+// 45 on floor 4, 250 on floor 9 and 450 on floor 14, so the first shop buys a heal or a potion and later
+// ones a piece of gear or two.
+// ponytail: prices don't grow with depth, so gold piles up past floor 20; scale them if deep runs matter
 func (it *Item) Price() int {
 	p := 10 * (it.Depth + 1 + 2*it.Plus)
 	if it.Class == 't' {

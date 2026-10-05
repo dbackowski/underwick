@@ -127,7 +127,7 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 		}
 
 		shop := -1
-		for i := 1; i < len(rooms) && shop < 0 && shopFloor(depth, boss); i++ {
+		for i := 1; i < len(rooms) && shop < 0 && shopFloor(depth); i++ {
 			if i != far && i != vault {
 				shop = i
 			}

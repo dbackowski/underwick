@@ -164,7 +164,7 @@ func TestGeneratedFloorsArePlayable(t *testing.T) {
 					fail("the merchant is out of reach")
 				}
 			}
-			if want := shopFloor(depth, boss); want != (strings.Count(all, "$") == 1) || strings.Count(all, "$") > 1 {
+			if want := shopFloor(depth); want != (strings.Count(all, "$") == 1) || strings.Count(all, "$") > 1 {
 				fail("a shop floor should have one merchant, and others none")
 			}
 		}
