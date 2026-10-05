@@ -77,6 +77,7 @@ type Game struct {
 	floats   []floater              // HP changes rising off creatures
 	drawn    map[*Entity][2]float64 // where each creature was drawn since the last turn, see at
 	pending  [2]int                 // a direction pressed mid-slide, taken when it ends, see pace
+	stuck    bool                   // the last step got nowhere, so a held key stops repeating, see pace
 	sound    int                    // which of soundLevels is on, from 0
 	from     map[*Entity][2]float64 // where each was drawn when this turn began, to slide on from there
 	heard    heard                  // the hero's state when sounds last played
@@ -159,10 +160,11 @@ func direction() (dx, dy, held int) {
 
 // pace decides whether a direction read now acts, see steps. While playing, steps never overlap: a press
 // made mid-slide is kept and taken when the slide ends, so two keys pressed together step one after the
-// other rather than as one 2-tile glide.
+// other rather than as one 2-tile glide. And a held key stops at what it can't get past, rather than
+// passing turns against a wall or walking on past a lava warning; pressing again goes ahead.
 func (g *Game) pace(dx, dy, held int) (int, int) {
 	since := g.tick - g.turnTick
-	if !steps(held, since, g.mode == "") {
+	if !steps(held, since, g.mode == "") || held > 1 && g.stuck && g.mode == "" {
 		dx, dy = 0, 0
 	}
 	switch {
@@ -354,7 +356,11 @@ func (g *Game) Update() error {
 		g.mode, w.Log = "shop", nil
 		return nil
 	case dx != 0 || dy != 0, justPressed(ebiten.KeySpace, ebiten.KeyPeriod):
+		p := w.Player
+		x, y, ahead := p.X, p.Y, w.Level[p.Y+dy][p.X+dx]
 		w.Step(dx, dy)
+		// Neither moved, struck nor changed what was ahead: a wall, a locked door, a lava warning.
+		g.stuck = (dx != 0 || dy != 0) && p.X == x && p.Y == y && p.Anim != "atk" && w.Level[y+dy][x+dx] == ahead
 	case justPressed(ebiten.KeyG):
 		w.PickUp()
 	case justPressed(ebiten.KeyI):

@@ -428,8 +428,8 @@ var tileNames = map[byte]string{
 	'&': "a chest", '0': "an empty chest", '$': "a merchant", '~': "water", '=': "lava", '%': "acid", '^': "a pit",
 }
 
-// Describe says what the hero knows of a tile: what stands there, if in sight, what lies there and
-// the tile itself. A tile never seen is unknown.
+// Describe says what the hero knows of a tile: what stands there, if in sight, with a monster's odds in a
+// fight, what lies there and the tile itself. A tile never seen is unknown.
 func (w *World) Describe(x, y int) string {
 	if !w.Seen[y][x] {
 		return "You haven't seen that."
@@ -443,12 +443,13 @@ func (w *World) Describe(x, y int) string {
 			for _, st := range []struct {
 				on   bool
 				name string
-			}{{m.Sleep != 0, "asleep"}, {m.Confused > 0, "confused"}, {m.Poison > 0, "poisoned"}} {
+			}{{m.Moves > 1, "fast"}, {m.Sleep != 0, "asleep"}, {m.Confused > 0, "confused"}, {m.Poison > 0, "poisoned"}} {
 				if st.on {
 					s += ", " + st.name
 				}
 			}
-			parts = append(parts, s+")")
+			parts = append(parts, fmt.Sprintf("%s) hits you %d%% for 1-%d, you hit it %d%%",
+				s, hitChance(m, w.Player), m.Dmg, hitChance(w.Player, m)))
 		}
 	}
 	for _, it := range w.ItemsAt(x, y) {

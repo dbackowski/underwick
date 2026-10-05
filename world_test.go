@@ -306,7 +306,7 @@ func TestDescribeAndHistory(t *testing.T) {
 	for x, want := range map[int]string{
 		1: "you, the floor",
 		2: "gold key, the floor",
-		3: fmt.Sprintf("orc (%d/%d HP, asleep), the floor", orc.HP, orc.MaxHP),
+		3: fmt.Sprintf("orc (%d/%d HP, asleep) hits you %d%% for 1-%d, you hit it 100%%, the floor", orc.HP, orc.MaxHP, hitChance(orc, w.Player), orc.Dmg),
 		5: "stairs down",
 	} {
 		if got := w.Describe(x, 1); got != want {
@@ -408,6 +408,14 @@ func TestPace(t *testing.T) {
 	}
 	if dx, dy := g.pace(1, 0, 1); dx != 1 || dy != 0 {
 		t.Fatal("a press after the slide should step at once")
+	}
+
+	g.stuck, g.tick = true, g.tick+animTime
+	if dx, dy := g.pace(1, 0, repeatDelay+animTime); dx != 0 || dy != 0 {
+		t.Fatal("a held key should stop at what it can't get past")
+	}
+	if dx, dy := g.pace(1, 0, 1); dx != 1 || dy != 0 {
+		t.Fatal("pressing again should go ahead")
 	}
 
 	g.turnTick, g.mode = g.tick, ""
