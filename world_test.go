@@ -55,11 +55,11 @@ func TestRegenAndDeath(t *testing.T) {
 		"####",
 	})
 	w.Player.HP = 10
-	for range regenEvery {
+	for range 100 {
 		w.Step(0, 0)
 	}
-	if w.Player.HP != 11 {
-		t.Fatalf("the hero should regain 1 HP every %d turns, got %d", regenEvery, w.Player.HP)
+	if w.Player.HP != 10 {
+		t.Fatalf("the hero should never regain HP by waiting, got %d", w.Player.HP)
 	}
 	w.damage(w.Player, 100)
 	if !w.Over || w.Score() != 100 {
@@ -240,8 +240,12 @@ func TestLevels(t *testing.T) {
 		"###",
 	})
 	was := w.Player.Kind
+	w.Player.HP = 1
 	w.gainXP(xpFor(1) + xpFor(2)) // straight to level 3
 	p := w.Player
+	if p.HP != p.MaxHP {
+		t.Fatalf("a level should restore all HP, got %d/%d", p.HP, p.MaxHP)
+	}
 	if w.ExpLevel != 3 || w.XP != 0 || p.MaxHP != was.MaxHP+10 || p.Atk != was.Atk+2 || p.Dmg != was.Dmg+1 || p.Def != was.Def+1 {
 		t.Fatalf("level 3 should add 10 HP, 2 accuracy, 1 damage and 1 armour, got level %d %+v", w.ExpLevel, p.Kind)
 	}

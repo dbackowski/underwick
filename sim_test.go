@@ -83,7 +83,7 @@ func diver(w *World) (int, int) {
 
 // tactician plays the way a careful player would: it strikes whatever it can reach, lets melee
 // monsters walk up to it so it hits first, charges shooters rather than standing in their line,
-// and rests to regain HP when hurt and nothing is hunting it.
+// and, knowing Heal, rests for the mana to cast it when hurt and nothing is hunting it.
 func tactician(w *World) (int, int) {
 	p := w.Player
 	if dx, dy := w.botStrike(); dx != 0 || dy != 0 {
@@ -99,8 +99,9 @@ func tactician(w *World) (int, int) {
 		}
 	}
 	sealed := !strings.Contains(strings.Join(w.Level, ""), ">")
-	if hunter == nil && (p.HP*3 < p.MaxHP*2 || sealed && p.HP < p.MaxHP) {
-		return 0, 0 // rest, and before a boss rest to full
+	healer := slices.ContainsFunc(w.Spells, func(s *Spell) bool { return s.Name == "heal" })
+	if hunter == nil && healer && (p.HP*3 < p.MaxHP*2 || sealed && p.HP < p.MaxHP) {
+		return 0, 0 // rest for the mana to heal, and before a boss heal to full
 	}
 	if hunter == nil && len(w.Inventory) < maxItems {
 		// Keep going for the item it set out for, even once it drops out of sight; otherwise pick

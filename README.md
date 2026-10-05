@@ -31,11 +31,12 @@ The top 10 runs are kept with their class, depth and cause of death. Both live i
 before an update that changes the rules is refused.
 
 Walk into a monster to attack it. A hit lands 70% of the time, plus 5% for each point of your accuracy over
-its armour, and deals 1 up to your weapon's damage. You regain 1 HP every 8 turns.
+its armour, and deals 1 up to your weapon's damage. HP never comes back on its own: only
+potions, the Heal spell and the merchant restore it, and gaining a level restores all of it.
 
 Monsters within 6 tiles notice you only if they can see you, then hunt you down to where they last saw you.
 Every 150 turns or so another monster wanders onto the floor out of sight and comes looking for you, so
-resting has a price. A third of the floor's own monsters start asleep, waking only by chance once they could see you, or when hit; a sleeper is
+waiting has a price. A third of the floor's own monsters start asleep, waking only by chance once they could see you, or when hit; a sleeper is
 always hit. Snakes and spiders can poison you (1 HP a turn), and imps and ghosts can confuse you (half
 your moves go astray).
 Twenty kinds live at different depths, from rats and bats on floor 1 to flayers and demons below floor 12;

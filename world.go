@@ -11,7 +11,6 @@ import (
 const (
 	sight      = 6 // how far (in steps) monsters notice the player
 	viewRadius = 7 // how far the player sees, in tiles
-	regenEvery = 8 // turns for the hero to regain 1 HP
 	bossEvery  = 5 // floors between bosses
 )
 
@@ -188,7 +187,6 @@ type World struct {
 	faces  map[*ItemKind]string // this run's potion colours and scroll labels
 	known  map[*ItemKind]bool   // potion and scroll kinds the hero has identified
 	bosses string               // the order this run meets the bosses in, as kind characters
-	regen  int                  // turns since the hero last regained HP
 	warned [2]int               // the lava tile the hero was last warned about
 	manaIn int                  // turns since the hero last regained mana
 	seed   uint64               // the run's seed, for saving
@@ -363,8 +361,8 @@ func (w *World) Score() int { return 100*w.Depth + 10*w.Kills + 50*(w.ExpLevel-1
 // with a gentler curve the hero outgrows the monsters and a good run never ends.
 func xpFor(l int) int { return 5 * l * l }
 
-// gainXP adds experience and levels the hero up: each level gives 5 max HP and 1 accuracy, every
-// 2nd level 1 damage and every 3rd 1 armour.
+// gainXP adds experience and levels the hero up: each level restores all HP and gives 5 max HP and 1
+// accuracy, every 2nd level 1 damage and every 3rd 1 armour.
 func (w *World) gainXP(n int) {
 	w.XP += n
 	for w.XP >= xpFor(w.ExpLevel) {
@@ -379,7 +377,7 @@ func (w *World) gainXP(n int) {
 			w.base.Def++
 		}
 		w.recalc()
-		w.heal(w.Player, 5)
+		w.heal(w.Player, w.Player.MaxHP)
 		if w.MaxMana > 0 {
 			w.MaxMana += 2
 			w.Mana += 2
@@ -533,12 +531,6 @@ func (w *World) turn(act func()) {
 	}
 	if w.Level[p.Y][p.X] == '~' && (p.X != fromX || p.Y != fromY) {
 		w.monstersAct() // wading is slow: the monsters get an extra turn
-	}
-	if w.Player.HP < w.Player.MaxHP {
-		if w.regen++; w.regen >= regenEvery {
-			w.regen = 0
-			w.Player.HP++
-		}
 	}
 	w.monstersAct()
 

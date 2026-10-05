@@ -24,7 +24,7 @@ func TestSaveAndContinue(t *testing.T) {
 	tested := 0
 	for _, c := range classes {
 		var w *World
-		for seed := uint64(42); seed < 52; seed++ { // a seed this class survives a stretch of play on
+		for seed := uint64(42); seed < 82; seed++ { // a seed this class survives a stretch of play on
 			w = NewGame(seed, c)
 			for range 400 { // items and spells included
 				if !w.Over && !w.botItems() {
