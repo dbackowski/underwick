@@ -27,8 +27,8 @@ R chooses a new hero after death. G picks up what you stand on, I opens your pac
 takes off an item), X drops an item, C casts a spell (a letter picks it, then a direction aims it if it needs
 aiming), L looks around (move the cursor to see what is on a tile, and how a monster's fight with you would
 go), M shows the last 100 messages, V turns the music off, then all sound, then both back on, F (or F11, or
-Alt+Enter) toggles full screen, and Escape closes a panel or opens the menu, where you can see the keys and
-high scores or save and quit.
+Alt+Enter) switches between full screen, which the game starts in, and a window, and Escape closes a panel or
+opens the menu, where you can see the keys and high scores or save and quit.
 
 Quitting, or closing the window, saves the run; continuing it deletes the save, and dying ends it for good.
 The top 10 runs are kept with their class, depth and cause of death. Both live in your user config folder

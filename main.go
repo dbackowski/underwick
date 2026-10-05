@@ -26,15 +26,32 @@ import (
 )
 
 const (
-	tile         = 12
-	viewW, viewH = 20, 15 // tiles of the floor on screen at once
-	screenW      = viewW * tile
-	screenH      = (viewH+1)*tile + msgH // the view, a HUD row, and two lines of messages
-	msgH         = 2*lineH + 2           // room for the font's descenders
-	lineH        = 9                     // the Oryx font is drawn at 8px
-	scale        = 4
-	animTime     = 12 // ticks a walk/attack animation plays after a turn
+	tile     = 12
+	baseW    = 20 * tile          // the smallest screen, in the art's pixels: 20 by 15 tiles of floor,
+	baseH    = (15+1)*tile + msgH // a HUD row, and two lines of messages
+	msgH     = 2*lineH + 2        // room for the font's descenders
+	lineH    = 9                  // the Oryx font is drawn at 8px
+	scale    = 4                  // the window's enlargement of the art, at first
+	animTime = 12                 // ticks a walk/attack animation plays after a turn
 )
+
+// The screen in the art's pixels, and the part of it showing the floor: at least baseW by baseH, grown to
+// fill the window by fit.
+var (
+	screenW, screenH = baseW, baseH
+	viewW, viewH     = baseW, baseH - tile - msgH
+)
+
+// fit sizes the screen to fill a w×h window of real pixels: the art is enlarged by the largest whole
+// number that still shows the smallest screen, and the floor's view grows to fill the rest, up to the
+// whole floor. It returns that enlargement.
+func fit(w, h int) int {
+	s := max(1, min(w/baseW, h/baseH))
+	viewW = min(max(w/s, baseW), mapW*tile)
+	viewH = min(max(h/s, baseH)-tile-msgH, mapH*tile)
+	screenW, screenH = viewW, viewH+tile+msgH
+	return s
+}
 
 // Copied from the Oryx bundle: its Sliced/ folder and oryx-simplex.ttf. Gitignored: the license forbids
 // redistributing them.
@@ -87,6 +104,7 @@ type Game struct {
 	heard    heard                  // the hero's state when sounds last played
 	music    *audio.Player          // the music playing, see playMusic
 	tune     string                 // its name
+	pixel    int                    // how many real pixels across an art pixel is drawn, see fit
 	lookX    int                    // the tile being looked at, in "look" mode
 	lookY    int
 }
@@ -459,7 +477,7 @@ type floater struct {
 const floatTime = 45 // ticks a number takes to rise and fade
 
 func (g *Game) Draw(out *ebiten.Image) {
-	if g.low == nil {
+	if g.low == nil || g.low.Bounds() != image.Rect(0, 0, screenW, screenH) { // the window changed size
 		g.low = ebiten.NewImage(screenW, screenH)
 	}
 	screen := g.low
@@ -476,10 +494,10 @@ func (g *Game) Draw(out *ebiten.Image) {
 		full(screen)
 	}
 
-	// The art, enlarged with hard pixel edges by the largest whole number that fits and centred, then the
-	// text over it at full resolution.
+	// The art, enlarged with hard pixel edges by the whole number fit chose and centred, then the text over
+	// it at full resolution.
 	b := out.Bounds()
-	s := max(1, min(b.Dx()/screenW, b.Dy()/screenH))
+	s := max(1, g.pixel)
 	ox, oy := float64((b.Dx()-screenW*s)/2), float64((b.Dy()-screenH*s)/2)
 	out.Fill(color.Black) // the bars around it
 	op := &ebiten.DrawImageOptions{}
@@ -607,9 +625,9 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 		hx, hy = float64(g.lookX*tile), float64(g.lookY*tile)
 		vector.StrokeRect(dst, float32(hx)+0.5, float32(hy)+0.5, tile-1, tile-1, 1, yellow, false)
 	}
-	cx := min(max(int(hx)-viewW/2*tile, 0), (mapW-viewW)*tile)
-	cy := min(max(int(hy)-viewH/2*tile, 0), (mapH-viewH)*tile)
-	screen.DrawImage(dst.SubImage(image.Rect(cx, cy, cx+viewW*tile, cy+viewH*tile)).(*ebiten.Image), nil)
+	cx := min(max(int(hx)+tile/2-viewW/2, 0), mapW*tile-viewW)
+	cy := min(max(int(hy)+tile/2-viewH/2, 0), mapH*tile-viewH)
+	screen.DrawImage(dst.SubImage(image.Rect(cx, cy, cx+viewW, cy+viewH)).(*ebiten.Image), nil)
 
 	// HP changes rise off the creatures and fade, where the hero can see.
 	g.floats = slices.DeleteFunc(g.floats, func(f floater) bool { return g.tick-f.born >= floatTime })
@@ -626,7 +644,7 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 	}
 
 	// HUD: the hero's HP, mana and level, a visible boss's HP, gold and the depth.
-	hud := float64(viewH*tile + 2)
+	hud := float64(viewH + 2)
 	hpBar(screen, 2, float32(hud+1), 44, 4, max(w.Player.HP, 0), w.Player.MaxHP)
 	stats := fmt.Sprintf("%d/%d", max(w.Player.HP, 0), w.Player.MaxHP)
 	if w.MaxMana > 0 {
@@ -640,7 +658,7 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 			hpBar(screen, 116, float32(hud+2), 38, 4, m.HP, m.MaxHP)
 		}
 	}
-	g.label(fmt.Sprintf("$%d  Deep %d", w.Gold, w.Depth), 160, hud, yellow)
+	g.labelRight(fmt.Sprintf("$%d  Deep %d", w.Gold, w.Depth), hud, yellow)
 
 	// Messages: this turn's events over two lines, dropping the oldest whole messages that don't fit.
 	lines := wrap(w.Log, screenW-4)
@@ -650,7 +668,7 @@ func (g *Game) drawWorld(screen *ebiten.Image) {
 		lines = lines[:min(len(lines), 2)]
 	}
 	for i, l := range lines {
-		g.label(l, 2, float64((viewH+1)*tile+i*lineH), white)
+		g.label(l, 2, float64(viewH+tile+i*lineH), white)
 	}
 
 	switch {
@@ -706,7 +724,7 @@ func (g *Game) drawRecap(screen *ebiten.Image) {
 	g.label("Last messages", 6, y, yellow)
 	y += lineH
 	var lines []string
-	fit := int((screenH-6-lineH-2-y)/lineH) - 1 // above the keys, with a line between
+	fit := int((float64(screenH-6-lineH-2)-y)/lineH) - 1 // above the keys, with a line between
 	h := w.History
 	for _, m := range h[max(0, len(h)-fit):] {
 		lines = append(lines, wrap(strings.Fields(m), screenW-12)...)
@@ -715,17 +733,19 @@ func (g *Game) drawRecap(screen *ebiten.Image) {
 		g.label(l, 6, y, white)
 		y += lineH
 	}
-	g.label("R: a new hero.  Esc: title screen.", 6, screenH-4-lineH-2, grey)
+	g.label("R: a new hero.  Esc: title screen.", 6, float64(screenH-4-lineH-2), grey)
 }
 
 // drawTitle is the first screen: the name, and where to go from here.
 func (g *Game) drawTitle(screen *ebiten.Image) {
 	panel(screen, 2, 2, screenW-4, screenH-4)
-	g.label("UNDERWICK", 92, 16, yellow)
-	g.label("The dark below the village never ends.", 14, 16+lineH+2, grey)
+	// Laid out for the smallest screen, and centred in a bigger one.
+	ox, oy := float64(screenW-baseW)/2, float64(screenH-baseH)/2
+	g.label("UNDERWICK", ox+92, oy+16, yellow)
+	g.label("The dark below the village never ends.", ox+14, oy+16+lineH+2, grey)
 	for i, c := range classes { // the heroes, waiting
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64(78+i*18), 44)
+		op.GeoM.Translate(math.Round(ox)+float64(78+i*18), math.Round(oy)+44)
 		screen.DrawImage(g.sprite(fmt.Sprintf("Character/%s_idle_d_%d", c.Name, (g.tick/20+i)%2+1)), op)
 	}
 	options := [][2]string{{"N", "New game"}, {"H", "High scores"}, {"K", "Keys"}, {"Q", "Quit"}}
@@ -736,14 +756,14 @@ func (g *Game) drawTitle(screen *ebiten.Image) {
 		options = append([][2]string{{"C", "Continue"}, {"N", "New game (ends the saved run)"}}, options[1:]...)
 	}
 	for i, o := range options {
-		y := 70 + float64(i)*(lineH+3)
-		g.label(o[0], 40, y, yellow)
-		g.label(o[1], 56, y, white)
+		y := oy + 70 + float64(i)*(lineH+3)
+		g.label(o[0], ox+40, y, yellow)
+		g.label(o[1], ox+56, y, white)
 	}
 	if g.notice != "" {
-		g.label(g.notice, 8, 136, yellow)
+		g.label(g.notice, ox+8, oy+136, yellow)
 	}
-	g.label("Art by Oryx Design Lab, oryxdesignlab.com", 6, screenH-4-lineH-2, grey)
+	g.label("Art by Oryx Design Lab, oryxdesignlab.com", ox+6, float64(screenH-4-lineH-2), grey)
 }
 
 // drawMenu is the pause menu during a run.
@@ -787,7 +807,7 @@ func (g *Game) drawKeys(screen *ebiten.Image) {
 	g.label("need their key.", 6, 5+15*lineH+4, grey)
 	g.label("With a bow, moving at a monster shoots.", 6, 5+16*lineH+4, grey)
 	g.label("Walk into a merchant to shop.", 6, 5+17*lineH+4, grey)
-	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
+	g.label("Esc to go back.", 6, float64(screenH-4-lineH-2), grey)
 }
 
 // drawLog shows the latest messages of the run, newest at the bottom.
@@ -818,7 +838,7 @@ func (g *Game) drawScores(screen *ebiten.Image) {
 		g.label(fmt.Sprintf("%2d. %5d  %s, depth %d", i+1, s.Points, s.Class, s.Depth), 6, y, white)
 		g.label(fmt.Sprintf("killed by %s, %s", s.Cause, s.Date), 34, y+lineH-2, grey)
 	}
-	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
+	g.label("Esc to go back.", 6, float64(screenH-4-lineH-2), grey)
 }
 
 // drawClasses lets the player pick a hero for a new run.
@@ -834,7 +854,7 @@ func (g *Game) drawClasses(screen *ebiten.Image) {
 		g.label(fmt.Sprintf("%c) %s", 'a'+i, strings.ToUpper(c.Name[:1])+c.Name[1:]), 24, y, white)
 		g.label(c.About, 24, y+lineH, grey)
 	}
-	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
+	g.label("Esc to go back.", 6, float64(screenH-4-lineH-2), grey)
 }
 
 // drawSpells lists the spells the hero knows, lettered, for casting.
@@ -912,12 +932,12 @@ func (g *Game) drawInventory(screen *ebiten.Image) {
 		g.labelRight(it.Bonuses(), y, grey)
 	}
 	p := w.Player
-	g.label(fmt.Sprintf("You: %d max hp, 1-%d dmg, %d arm, %d acc", p.MaxHP, p.Dmg, p.Def, p.Atk), 6, screenH-4-lineH-2, yellow)
+	g.label(fmt.Sprintf("You: %d max hp, 1-%d dmg, %d arm, %d acc", p.MaxHP, p.Dmg, p.Def, p.Atk), 6, float64(screenH-4-lineH-2), yellow)
 }
 
 // labelRight queues text flush with a full-width panel's right edge.
 func (g *Game) labelRight(s string, y float64, c color.Color) {
-	g.label(s, screenW-6-text.Advance(s, font)/scale, y, c)
+	g.label(s, float64(screenW-6)-text.Advance(s, font)/scale, y, c)
 }
 
 // drawShop lists the merchant's wares and services, lettered, with their prices.
@@ -953,9 +973,9 @@ func (g *Game) drawShop(screen *ebiten.Image) {
 	row(len(w.Wares), "", "heal your wounds", w.HealPrice())
 	row(len(w.Wares)+1, "", "name your potions and scrolls", w.IdentifyPrice())
 	if len(w.Log) > 0 {
-		g.label(w.Log[len(w.Log)-1], 6, screenH-4-2*lineH-4, yellow)
+		g.label(w.Log[len(w.Log)-1], 6, float64(screenH-4-2*lineH-4), yellow)
 	}
-	g.label("Esc to leave.", 6, screenH-4-lineH-2, grey)
+	g.label("Esc to leave.", 6, float64(screenH-4-lineH-2), grey)
 }
 
 // wrap packs messages into lines no wider than width, never splitting one message across lines.
@@ -982,9 +1002,9 @@ func (g *Game) label(s string, x, y float64, c color.Color) {
 	g.labels = append(g.labels, label{s, x, y, c})
 }
 
-func panel(dst *ebiten.Image, x, y, w, h float32) {
-	vector.FillRect(dst, x, y, w, h, color.RGBA{0x10, 0x10, 0x18, 0xf0}, false)
-	vector.StrokeRect(dst, x, y, w, h, 1, grey, false)
+func panel(dst *ebiten.Image, x, y, w, h int) {
+	vector.FillRect(dst, float32(x), float32(y), float32(w), float32(h), color.RGBA{0x10, 0x10, 0x18, 0xf0}, false)
+	vector.StrokeRect(dst, float32(x), float32(y), float32(w), float32(h), 1, grey, false)
 }
 
 // statusIcon names the FX icon for a creature's worst condition, or "" if it has none.
@@ -1169,7 +1189,9 @@ func (g *Game) Layout(int, int) (int, int) { panic("LayoutF is used") }
 // numbers to fill a full screen or a Retina display without blurring.
 func (g *Game) LayoutF(w, h float64) (float64, float64) {
 	d := ebiten.Monitor().DeviceScaleFactor()
-	return math.Ceil(w * d), math.Ceil(h * d)
+	w, h = math.Ceil(w*d), math.Ceil(h*d)
+	g.pixel = fit(int(w), int(h))
+	return w, h
 }
 
 func main() {
@@ -1183,6 +1205,8 @@ func main() {
 	loadSounds()
 	ebiten.SetWindowSize(screenW*scale, screenH*scale)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	// Full screen from the start; a browser only allows it after a key press, and a screenshot wants the window.
+	ebiten.SetFullscreen(!inBrowser && *shot == "")
 	ebiten.SetWindowIcon([]image.Image{icon(16), icon(32), icon(48), icon(64), icon(128)}) // not on macOS: see mac/app.sh
 	ebiten.SetWindowTitle("Underwick")
 	ebiten.SetWindowClosingHandled(true)

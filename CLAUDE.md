@@ -35,7 +35,9 @@ A turn-based roguelike in Go with Ebitengine, all in package `main`. `README.md`
 - Browser build: `GOOS=js GOARCH=wasm go build -o web/underwick.wasm .`. The output embeds the sprites, so it is
   gitignored. `web/deploy.sh` publishes it to GitHub Pages; it pushes, so run it only when asked.
 - macOS app: `mac/app.sh` builds `Underwick.app` (gitignored), with an icon made from the hero sprite.
-- The screen is as big as the window in real pixels; `Draw` enlarges the art by the largest whole number that fits.
+- The screen grows with the window: `fit` picks the largest whole-number enlargement and widens the floor's view
+  and `screenW`/`screenH` to fill the rest. Lay panels out from `screenW`/`screenH`, never fixed widths, and check
+  a screenshot at a wide window size too (`ebiten.SetWindowSize` in the temporary `main()` setup).
 
 ## Conventions
 
