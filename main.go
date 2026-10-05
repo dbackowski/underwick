@@ -241,11 +241,14 @@ func (g *Game) Update() error {
 				return nil
 			}
 			g.world, g.mode, g.recorded, g.lastTurn = w, "", false, w.Turn
+			if inBrowser { // continuing deleted the save, and a closed tab gives no warning
+				g.saveRun()
+			}
 		case justPressed(ebiten.KeyH):
 			g.back, g.mode = "title", "scores"
 		case justPressed(ebiten.KeyK):
 			g.back, g.mode = "title", "keys"
-		case justPressed(ebiten.KeyQ, ebiten.KeyEscape):
+		case justPressed(ebiten.KeyQ, ebiten.KeyEscape) && !inBrowser: // a page has nothing to quit to
 			return ebiten.Termination
 		}
 		return nil
@@ -264,6 +267,10 @@ func (g *Game) Update() error {
 			g.back, g.mode = "menu", "scores"
 		case justPressed(ebiten.KeyQ):
 			g.saveRun()
+			if inBrowser {
+				g.mode = "title"
+				return nil
+			}
 			return ebiten.Termination
 		}
 		return nil
@@ -395,6 +402,9 @@ func (g *Game) afterAction() {
 	hs := w.TakeHits()
 	if w.Turn != g.lastTurn {
 		g.lastTurn, g.turnTick = w.Turn, g.tick
+		if inBrowser { // a closed tab gives no warning, so the run is kept every turn
+			g.saveRun()
+		}
 		if len(g.drawn) > 0 { // with no frame drawn since the last turn, the creatures are still where it began
 			g.from = g.drawn
 		}
@@ -695,6 +705,9 @@ func (g *Game) drawTitle(screen *ebiten.Image) {
 		screen.DrawImage(g.sprite(fmt.Sprintf("Character/%s_idle_d_%d", c.Name, (g.tick/20+i)%2+1)), op)
 	}
 	options := [][2]string{{"N", "New game"}, {"H", "High scores"}, {"K", "Keys"}, {"Q", "Quit"}}
+	if inBrowser {
+		options = options[:3]
+	}
 	if HasSave() {
 		options = append([][2]string{{"C", "Continue"}, {"N", "New game (ends the saved run)"}}, options[1:]...)
 	}
@@ -713,7 +726,11 @@ func (g *Game) drawTitle(screen *ebiten.Image) {
 func (g *Game) drawMenu(screen *ebiten.Image) {
 	panel(screen, 50, 50, screenW-100, 6*lineH+10)
 	g.label("Paused", 58, 54, yellow)
-	for i, o := range [][2]string{{"Esc", "Resume"}, {"K", "Keys"}, {"H", "High scores"}, {"Q", "Save and quit"}} {
+	quit := "Save and quit"
+	if inBrowser {
+		quit = "Save and leave"
+	}
+	for i, o := range [][2]string{{"Esc", "Resume"}, {"K", "Keys"}, {"H", "High scores"}, {"Q", quit}} {
 		y := 54 + float64(i+1)*lineH + 4
 		g.label(o[0], 58, y, yellow)
 		g.label(o[1], 84, y, white)

@@ -4,20 +4,9 @@ import (
 	"cmp"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"slices"
 	"time"
 )
-
-// dataDir holds the save and the high scores, in the user's config folder. Tests point it elsewhere.
-var dataDir = func() string {
-	d, err := os.UserConfigDir()
-	if err != nil {
-		return "."
-	}
-	return filepath.Join(d, "underwick")
-}()
 
 // saveVersion goes up whenever a change to the rules would replay an old save differently.
 const saveVersion = 6
@@ -36,7 +25,7 @@ type saved struct {
 	Actions []Action
 }
 
-func savePath() string { return filepath.Join(dataDir, "save.json") }
+const saveFile = "save.json"
 
 // Save writes the run so it can be continued. A dead hero's run is not saved.
 func (w *World) Save() error {
@@ -47,22 +36,18 @@ func (w *World) Save() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(savePath(), data, 0o644)
+	return writeData(saveFile, data)
 }
 
 // HasSave reports whether there is a run to continue.
 func HasSave() bool {
-	_, err := os.Stat(savePath())
-	return err == nil
+	return hasData(saveFile)
 }
 
 // Continue loads the saved run by replaying it, and deletes the save: a run can't be loaded twice, so
 // death stays final. A save from an older version of the rules is thrown away.
 func Continue() (*World, error) {
-	data, err := os.ReadFile(savePath())
+	data, err := readData(saveFile)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +81,7 @@ func Continue() (*World, error) {
 	return w, nil
 }
 
-func DeleteSave() { os.Remove(savePath()) }
+func DeleteSave() { removeData(saveFile) }
 
 // Score is one finished run on the high-score list.
 type Score struct {
@@ -106,12 +91,12 @@ type Score struct {
 
 const maxScores = 10
 
-func scoresPath() string { return filepath.Join(dataDir, "scores.json") }
+const scoresFile = "scores.json"
 
 // LoadScores reads the high-score list, best first. A missing or broken file is an empty list.
 func LoadScores() []Score {
 	var ss []Score
-	if data, err := os.ReadFile(scoresPath()); err == nil {
+	if data, err := readData(scoresFile); err == nil {
 		json.Unmarshal(data, &ss)
 	}
 	return ss
@@ -128,8 +113,8 @@ func (w *World) RecordScore() int {
 	if place >= maxScores {
 		place = -1
 	}
-	if data, err := json.Marshal(ss); err == nil && os.MkdirAll(dataDir, 0o755) == nil {
-		os.WriteFile(scoresPath(), data, 0o644)
+	if data, err := json.Marshal(ss); err == nil {
+		writeData(scoresFile, data)
 	}
 	return place
 }

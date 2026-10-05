@@ -1,8 +1,9 @@
+//go:build !js
+
 package main
 
 import (
 	"fmt"
-	"os"
 	"testing"
 )
 
@@ -57,7 +58,7 @@ func TestSaveAndContinue(t *testing.T) {
 		t.Fatalf("only %d classes survived a stretch of play to be saved; try more seeds", tested)
 	}
 
-	os.WriteFile(savePath(), []byte(`{"Version": 0, "Seed": 1, "Class": "warrior"}`), 0o644)
+	writeData(saveFile, []byte(`{"Version": 0, "Seed": 1, "Class": "warrior"}`))
 	if _, err := Continue(); err == nil || HasSave() {
 		t.Fatal("a save from an older version should be refused and thrown away")
 	}

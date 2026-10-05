@@ -3,6 +3,9 @@
 A classic turn-based roguelike built with Go and [Ebitengine](https://ebitengine.org). Go down into the
 dungeon below Underwick as far as you can. Death is permanent, and the dungeon has no bottom.
 
+**Play it in your browser: https://dbackowski.github.io/underwick/** (keyboard needed), or build it to run on your
+desktop as below.
+
 ## Setup
 
 The sprites and font are from Oryx Design Lab's [8-Bit Remaster](https://www.oryxdesignlab.com/products/p/lofi-fantasy-remaster) pack and are not in this repo (license). Copy them in before building:
@@ -27,8 +30,9 @@ panel or opens the menu, where you can see the keys and high scores or save and 
 
 Quitting, or closing the window, saves the run; continuing it deletes the save, and dying ends it for good.
 The top 10 runs are kept with their class, depth and cause of death. Both live in your user config folder
-(`~/Library/Application Support/underwick` on macOS). A save is replayed from your moves, so one made
-before an update that changes the rules is refused.
+(`~/Library/Application Support/underwick` on macOS); in the browser, in its local storage, with the run saved
+after every turn. A save is replayed from your moves, so one made before an update that changes the rules is
+refused.
 
 Walk into a monster to attack it. A hit lands 70% of the time, plus 5% for each point of your accuracy over
 its armour, and deals 1 up to your weapon's damage. HP never comes back on its own: only
@@ -84,8 +88,9 @@ Your score is 100 per floor reached, 10 per kill, 50 per level gained, and all t
     python3 -m http.server -d web
 
 then open http://localhost:8000. The build embeds the sprites, which Oryx's license allows in a released game,
-so it stays out of `main` like `assets/`; never upload the `assets/` folder itself. Saving and high scores don't
-work in the browser yet.
+so it stays out of `main` like `assets/`; never upload the `assets/` folder itself. The browser version keeps the
+run and the high scores in the browser's local storage, so they belong to that browser on that device. With nothing
+to quit to, the title screen has no Quit, and Q in the pause menu saves and goes back to the title.
 
 `./web/deploy.sh` builds it and publishes it to the `gh-pages` branch, replacing what was there. Set the repo's
 Settings → Pages to deploy from that branch once, and the game is at https://dbackowski.github.io/underwick/.

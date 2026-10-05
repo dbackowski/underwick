@@ -6,7 +6,8 @@ A turn-based roguelike in Go with Ebitengine, all in package `main`. `README.md`
 
 - `world.go`: rules, turns, combat, monsters; `gen.go`: floor generation; `items.go`, `magic.go` (classes and
   spells), `shop.go`: what the hero can carry, cast and buy.
-- `main.go`: everything on screen and all input; `sound.go`: effects and music; `save.go`: saves and high scores.
+- `main.go`: everything on screen and all input; `sound.go`: effects and music.
+- `save.go`: saves and high scores, kept by `store.go` in files, or by `store_js.go` in the browser's local storage.
 - Tests sit beside each file. `sim_test.go` holds the balance bots.
 
 ## Assets
@@ -25,7 +26,7 @@ A turn-based roguelike in Go with Ebitengine, all in package `main`. `README.md`
 
 ## Checking changes
 
-- `go vet ./... && go test ./...`
+- `go vet ./... && go test ./...`, and `GOOS=js GOARCH=wasm go vet ./...` for the browser build.
 - `go run . -shot out.png` saves one rendered frame. To check a panel or a scene, temporarily set up the state in
   `main()`, take the shot, and restore `main.go` afterwards.
 - Panels fit about 42 characters a line; check new on-screen text in a screenshot.
