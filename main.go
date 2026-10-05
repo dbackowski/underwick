@@ -254,6 +254,15 @@ func (g *Game) Update() error {
 		justPressed(ebiten.KeyEnter) && ebiten.IsKeyPressed(ebiten.KeyAlt) {
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
 	}
+	// The game has no use for the mouse, so in full screen its cursor is hidden. Checked every frame, since
+	// the system can leave full screen too.
+	cursor := ebiten.CursorModeVisible
+	if ebiten.IsFullscreen() {
+		cursor = ebiten.CursorModeHidden
+	}
+	if ebiten.CursorMode() != cursor {
+		ebiten.SetCursorMode(cursor)
+	}
 	if justPressed(ebiten.KeyV) { // anywhere, so the music can be stopped from the title screen
 		g.sound = (g.sound + 1) % len(soundLevels)
 		if g.notice = soundLevels[g.sound]; g.world != nil {
