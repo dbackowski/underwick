@@ -216,3 +216,19 @@ func TestWalkFrames(t *testing.T) {
 		}
 	}
 }
+
+func TestBonuses(t *testing.T) {
+	for _, c := range []struct {
+		it   *Item
+		want string
+	}{
+		{&Item{ItemKind: kindNamed("sword"), Plus: 2}, "+6 dmg"},
+		{&Item{ItemKind: kindNamed("metal shield"), Plus: 1}, "+4 arm -1 acc"},
+		{&Item{ItemKind: kindNamed("amulet of life")}, "+10 hp"},
+		{&Item{ItemKind: kindNamed("potion of healing")}, ""},
+	} {
+		if got := c.it.Bonuses(); got != c.want {
+			t.Errorf("%s +%d: got %q, want %q", c.it.Name, c.it.Plus, got, c.want)
+		}
+	}
+}

@@ -53,7 +53,8 @@ give a hero without magic some mana.
 
 Items lie about the floors, better ones deeper: weapons (dagger, sword, staff, spear, axe, hammer, bow), armour
 for the head, body, hands and feet, shields, rings, an amulet, potions, scrolls and tomes. Each hero starts
-with its own gear in use. Weapons and armour can be enchanted (sword +2). Potions and scrolls hide what they are: each run
+with its own gear in use. The pack (I) shows what each piece adds (dmg, arm for armour, acc for accuracy, hp)
+and your totals; armour makes monsters miss more, 5% a point. Weapons and armour can be enchanted (sword +2). Potions and scrolls hide what they are: each run
 gives the potions their colours and the scrolls their labels anew, and you learn a kind by using one.
 You can carry 20 items. Gold is picked up as you walk over it.
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"slices"
+	"strings"
 )
 
 // ItemKind is a type of item. Worn items add their bonuses to the hero; potions and scrolls do something
@@ -316,6 +317,37 @@ func (w *World) wear(it *Item) {
 	w.recalc()
 }
 
+// bonuses is what a piece of gear adds while worn: its enchantment goes to a weapon's damage, or to
+// anything else's armour.
+func (it *Item) bonuses() (atk, def, dmg, hp int) {
+	atk, def, dmg, hp = it.Atk, it.Def, it.Dmg, it.MaxHP
+	if it.Slot == "weapon" {
+		dmg += it.Plus
+	} else {
+		def += it.Plus
+	}
+	return atk, def, dmg, hp
+}
+
+// Bonuses describes what a piece of gear adds while worn, shortly, e.g. "+4 dmg +1 arm", or "" for
+// anything else.
+func (it *Item) Bonuses() string {
+	if it.Slot == "" || it.Slot == "gold" || it.Slot == "key" {
+		return ""
+	}
+	atk, def, dmg, hp := it.bonuses()
+	var s string
+	for _, b := range []struct {
+		n    int
+		name string
+	}{{dmg, "dmg"}, {def, "arm"}, {atk, "acc"}, {hp, "hp"}} {
+		if b.n != 0 {
+			s += fmt.Sprintf(" %+d %s", b.n, b.name)
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
 // recalc sets the hero's stats: its base, which levels raise, plus everything it wears.
 func (w *World) recalc() {
 	k := w.base
@@ -324,17 +356,10 @@ func (w *World) recalc() {
 		if !it.Worn {
 			continue
 		}
-		k.Atk += it.Atk
-		k.Def += it.Def
-		k.Dmg += it.Dmg
-		k.MaxHP += it.MaxHP
-		if it.Slot == "weapon" {
-			k.Dmg += it.Plus
-			if it.Range > 0 {
-				k.Range, k.Missile = it.Range, "arrow"
-			}
-		} else {
-			k.Def += it.Plus
+		atk, def, dmg, hp := it.bonuses()
+		k.Atk, k.Def, k.Dmg, k.MaxHP = k.Atk+atk, k.Def+def, k.Dmg+dmg, k.MaxHP+hp
+		if it.Range > 0 {
+			k.Range, k.Missile = it.Range, "arrow"
 		}
 	}
 	p := w.Player

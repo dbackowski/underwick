@@ -842,9 +842,9 @@ func tileSprite(c byte, th theme, frame int) string {
 func (g *Game) drawInventory(screen *ebiten.Image) {
 	w := g.world
 	panel(screen, 2, 2, screenW-4, screenH-4)
-	title := "Use or wear which? (Esc to close)"
+	title := "Use or wear which? Yellow: in use."
 	if g.mode == "drop" {
-		title = "Drop which? (Esc to cancel)"
+		title = "Drop which? Yellow: in use."
 	}
 	g.label(title, 6, 4, yellow)
 	if len(w.Inventory) == 0 {
@@ -856,12 +856,20 @@ func (g *Game) drawInventory(screen *ebiten.Image) {
 		op.GeoM.Scale(0.75, 0.75) // the 12px sprite in a 9px line
 		op.GeoM.Translate(6, y-1)
 		screen.DrawImage(g.sprite("World/"+w.ItemSprite(it)), op)
-		label := fmt.Sprintf("%c) %s", 'a'+i, w.ItemName(it))
+		c := white
 		if it.Worn {
-			label += " (in use)"
+			c = yellow
 		}
-		g.label(label, 18, y, white)
+		g.label(fmt.Sprintf("%c) %s", 'a'+i, w.ItemName(it)), 18, y, c)
+		g.labelRight(it.Bonuses(), y, grey)
 	}
+	p := w.Player
+	g.label(fmt.Sprintf("You: %d max hp, 1-%d dmg, %d arm, %d acc", p.MaxHP, p.Dmg, p.Def, p.Atk), 6, screenH-4-lineH-2, yellow)
+}
+
+// labelRight queues text flush with a full-width panel's right edge.
+func (g *Game) labelRight(s string, y float64, c color.Color) {
+	g.label(s, screenW-6-text.Advance(s, font)/scale, y, c)
 }
 
 // drawShop lists the merchant's wares and services, lettered, with their prices.
@@ -887,6 +895,7 @@ func (g *Game) drawShop(screen *ebiten.Image) {
 	}
 	for i, it := range w.Wares {
 		row(i, w.ItemSprite(it), w.ItemName(it), it.Price())
+		g.labelRight(it.Bonuses(), y, grey)
 	}
 	if len(w.Wares) == 0 {
 		y += lineH + 2
