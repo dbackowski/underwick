@@ -83,10 +83,13 @@ Your score is 100 per floor reached, 10 per kill, 50 per level gained, and all t
     cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/
     python3 -m http.server -d web
 
-then open http://localhost:8000. To share it, put the `web/` folder on any static host (itch.io takes it zipped
-as an HTML5 game). The build embeds the sprites, which Oryx's license allows in a released game, so it stays
-out of git like `assets/`; never upload the `assets/` folder itself. Saving and high scores don't work in the
-browser yet.
+then open http://localhost:8000. The build embeds the sprites, which Oryx's license allows in a released game,
+so it stays out of `main` like `assets/`; never upload the `assets/` folder itself. Saving and high scores don't
+work in the browser yet.
+
+`./web/deploy.sh` builds it and publishes it to the `gh-pages` branch, replacing what was there. Set the repo's
+Settings → Pages to deploy from that branch once, and the game is at https://dbackowski.github.io/underwick/.
+It has to run here rather than in GitHub Actions, which never has the sprites.
 
 ## Development
 

@@ -32,7 +32,7 @@ A turn-based roguelike in Go with Ebitengine, all in package `main`. `README.md`
 - Before and after any balance change, run `UNDERWICK_SIM=1 go test -run Balance -v` (300 seeded runs per bot,
   about a minute) and compare.
 - Browser build: `GOOS=js GOARCH=wasm go build -o web/underwick.wasm .`. The output embeds the sprites, so it is
-  gitignored.
+  gitignored. `web/deploy.sh` publishes it to GitHub Pages; it pushes, so run it only when asked.
 
 ## Conventions
 
