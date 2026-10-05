@@ -28,6 +28,11 @@ func TestClasses(t *testing.T) {
 				t.Fatalf("%s should start with its %s in use", c.Name, it.Name)
 			}
 		}
+		for _, s := range w.Spells {
+			if s.Cost > c.Mana {
+				t.Fatalf("%s should start with the mana to cast %s", c.Name, s.Name)
+			}
+		}
 	}
 }
 

@@ -23,7 +23,7 @@ var classes = []*Class{
 	{Kind: Kind{Name: "thief", MaxHP: 16, Atk: 3, Def: 1, Dmg: 2, Moves: 1, Range: 1},
 		Start: []string{"dagger", "boots"}, Stealth: true, About: "Quiet: sleepers wake half as often."},
 	{Kind: Kind{Name: "cleric", MaxHP: 16, Def: 2, Dmg: 1, Moves: 1, Range: 1},
-		Start: []string{"hammer"}, Spells: []string{"heal"}, Mana: 8, About: "Armoured, and casts Heal."},
+		Start: []string{"hammer"}, Spells: []string{"heal"}, Mana: 10, About: "Armoured, and casts Heal."},
 }
 
 // Spell is magic the hero can learn from a tome and cast for mana.
@@ -46,7 +46,7 @@ var spells = []*Spell{
 		w.say("The fire bolt hits the %s.", t.Name)
 		w.damage(t, 2+w.rng.IntN(4)+w.ExpLevel/2)
 	}},
-	{Name: "heal", Cost: 8, cast: func(w *World, dx, dy int) {
+	{Name: "heal", Cost: 10, cast: func(w *World, dx, dy int) {
 		p := w.Player
 		w.heal(p, 4+w.ExpLevel)
 		p.Poison = 0
