@@ -13,6 +13,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -51,8 +52,11 @@ var themes = []theme{
 }
 
 var (
-	shot = flag.String("shot", "", "save one rendered frame to this PNG and exit, to check rendering without a screen capture")
-	font *text.GoTextFace
+	shot    = flag.String("shot", "", "save one rendered frame to this PNG and exit, to check rendering without a screen capture")
+	iconset = flag.String("iconset", "", "write the app icon in every size into this .iconset folder and exit, for mac/app.sh")
+	font    *text.GoTextFace // text at the base scale, for measuring; see faceAt for drawing
+	fontSrc *text.GoTextFaceSource
+	faces   = map[int]*text.GoTextFace{}
 
 	white  = color.RGBA{0xff, 0xff, 0xff, 0xff}
 	yellow = color.RGBA{0xff, 0xe0, 0x60, 0xff}
@@ -122,8 +126,17 @@ func loadFont() *text.GoTextFace {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// At full window resolution: drawn small and enlarged, the glyphs' anti-aliased edges blur.
-	return &text.GoTextFace{Source: src, Size: 8 * scale}
+	fontSrc = src
+	return faceAt(scale)
+}
+
+// faceAt is the font for art enlarged s times. Text is drawn at full resolution: drawn small and enlarged,
+// the glyphs' anti-aliased edges would blur.
+func faceAt(s int) *text.GoTextFace {
+	if faces[s] == nil {
+		faces[s] = &text.GoTextFace{Source: fontSrc, Size: float64(8 * s)}
+	}
+	return faces[s]
 }
 
 func justPressed(keys ...ebiten.Key) bool {
@@ -218,6 +231,11 @@ func (g *Game) saveRun() {
 
 func (g *Game) Update() error {
 	g.tick++
+	choosing := slices.Contains([]string{"use", "drop", "cast", "shop", "class"}, g.mode) // where F is a letter
+	if justPressed(ebiten.KeyF11) || justPressed(ebiten.KeyF) && !choosing ||
+		justPressed(ebiten.KeyEnter) && ebiten.IsKeyPressed(ebiten.KeyAlt) {
+		ebiten.SetFullscreen(!ebiten.IsFullscreen())
+	}
 	if justPressed(ebiten.KeyV) { // anywhere, so the music can be stopped from the title screen
 		g.sound = (g.sound + 1) % len(soundLevels)
 		if g.notice = soundLevels[g.sound]; g.world != nil {
@@ -458,15 +476,21 @@ func (g *Game) Draw(out *ebiten.Image) {
 		full(screen)
 	}
 
-	// The art, enlarged with hard pixel edges, then the text over it at full resolution.
+	// The art, enlarged with hard pixel edges by the largest whole number that fits and centred, then the
+	// text over it at full resolution.
+	b := out.Bounds()
+	s := max(1, min(b.Dx()/screenW, b.Dy()/screenH))
+	ox, oy := float64((b.Dx()-screenW*s)/2), float64((b.Dy()-screenH*s)/2)
+	out.Fill(color.Black) // the bars around it
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Scale(scale, scale)
+	op.GeoM.Scale(float64(s), float64(s))
+	op.GeoM.Translate(ox, oy)
 	out.DrawImage(screen, op)
 	for _, l := range g.labels {
 		op := &text.DrawOptions{}
-		op.GeoM.Translate(l.x*scale, l.y*scale)
+		op.GeoM.Translate(l.x*float64(s)+ox, l.y*float64(s)+oy)
 		op.ColorScale.ScaleWithColor(l.c)
-		text.Draw(out, l.s, font, op)
+		text.Draw(out, l.s, faceAt(s), op)
 	}
 	if *shot != "" && g.tick > 30 { // let a few idle frames pass first
 		saveShot(out, *shot)
@@ -753,15 +777,16 @@ func (g *Game) drawKeys(screen *ebiten.Image) {
 		{"M", "messages so far"},
 		{"Esc", "menu, or close a panel"},
 		{"V", "sound: all, effects, none"},
+		{"F", "full screen, on or off"},
 	} {
 		y := 5 + float64(i+1)*lineH + 4
 		g.label(l[0], 6, y, yellow)
 		g.label(l[1], 84, y, white)
 	}
-	g.label("Walk into a door to open it. Locked doors", 6, 5+13*lineH+4, grey)
-	g.label("need their key.", 6, 5+14*lineH+4, grey)
-	g.label("With a bow, moving at a monster shoots.", 6, 5+15*lineH+4, grey)
-	g.label("Walk into a merchant to shop.", 6, 5+16*lineH+4, grey)
+	g.label("Walk into a door to open it. Locked doors", 6, 5+14*lineH+4, grey)
+	g.label("need their key.", 6, 5+15*lineH+4, grey)
+	g.label("With a bow, moving at a monster shoots.", 6, 5+16*lineH+4, grey)
+	g.label("Walk into a merchant to shop.", 6, 5+17*lineH+4, grey)
 	g.label("Esc to go back.", 6, screenH-4-lineH-2, grey)
 }
 
@@ -1068,6 +1093,60 @@ func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, outline color.RGBA) {
 	dst.DrawImage(g.sprite(name), op)
 }
 
+// icon is the warrior, cropped to its outline and enlarged with hard pixel edges to fill most of a
+// size×size square, for the window and app icons.
+func icon(size int) image.Image {
+	f, err := assets.Open("assets/Character/warrior_idle_d_1.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	src, err := png.Decode(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var b image.Rectangle // the opaque pixels
+	for y := range tile {
+		for x := range tile {
+			if _, _, _, a := src.At(x, y).RGBA(); a > 0 {
+				b = b.Union(image.Rect(x, y, x+1, y+1))
+			}
+		}
+	}
+	k := max(1, size*7/8/max(b.Dx(), b.Dy()))
+	ox, oy := (size-b.Dx()*k)/2, (size-b.Dy()*k)/2
+	img := image.NewNRGBA(image.Rect(0, 0, size, size))
+	for y := range b.Dy() * k {
+		for x := range b.Dx() * k {
+			img.Set(ox+x, oy+y, src.At(b.Min.X+x/k, b.Min.Y+y/k))
+		}
+	}
+	return img
+}
+
+// writeIconset writes the icon in the sizes macOS's iconutil expects in an .iconset folder.
+func writeIconset(dir string) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		log.Fatal(err)
+	}
+	for _, n := range []int{16, 32, 128, 256, 512} {
+		for _, x := range []int{1, 2} {
+			name := fmt.Sprintf("icon_%dx%d.png", n, n)
+			if x == 2 {
+				name = fmt.Sprintf("icon_%dx%d@2x.png", n, n)
+			}
+			f, err := os.Create(filepath.Join(dir, name))
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := png.Encode(f, icon(n*x)); err != nil {
+				log.Fatal(err)
+			}
+			f.Close()
+		}
+	}
+}
+
 func (g *Game) sprite(name string) *ebiten.Image {
 	img, ok := g.sprites[name]
 	if !ok {
@@ -1084,14 +1163,27 @@ func (g *Game) draw(dst *ebiten.Image, name string, x, y int, alpha float32) {
 	dst.DrawImage(img, op)
 }
 
-func (g *Game) Layout(int, int) (int, int) { return screenW * scale, screenH * scale }
+func (g *Game) Layout(int, int) (int, int) { panic("LayoutF is used") }
+
+// LayoutF makes the screen as big as the window in real pixels, so Draw can enlarge the art by whole
+// numbers to fill a full screen or a Retina display without blurring.
+func (g *Game) LayoutF(w, h float64) (float64, float64) {
+	d := ebiten.Monitor().DeviceScaleFactor()
+	return math.Ceil(w * d), math.Ceil(h * d)
+}
 
 func main() {
 	flag.Parse()
+	if *iconset != "" {
+		writeIconset(*iconset)
+		return
+	}
 	font = loadFont()
 	audioCtx = audio.NewContext(sampleRate)
 	loadSounds()
 	ebiten.SetWindowSize(screenW*scale, screenH*scale)
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	ebiten.SetWindowIcon([]image.Image{icon(16), icon(32), icon(48), icon(64), icon(128)}) // not on macOS: see mac/app.sh
 	ebiten.SetWindowTitle("Underwick")
 	ebiten.SetWindowClosingHandled(true)
 	if err := ebiten.RunGame(&Game{sprites: loadSprites(), mode: "title"}); err != nil {

@@ -22,11 +22,13 @@ hero to start: the warrior (tough, with a sword), the archer (shoots with a bow)
 casts Fire Bolt), the thief (quiet, so sleeping monsters wake half as often) or the cleric (armoured,
 casts Heal).
 
-Arrow keys or WASD move and attack (hold one to keep walking, up to a wall or a warning), space waits a turn, R chooses a new hero after death. G picks up
-what you stand on, I opens your pack (a letter uses, wears or takes off an item), X drops an item, C
-casts a spell (a letter picks it, then a direction aims it if it needs aiming), L looks around (move
-the cursor to see what is on a tile, and how a monster's fight with you would go), M shows the last 100 messages, V turns the music off, then all sound, then both back on, and Escape closes a
-panel or opens the menu, where you can see the keys and high scores or save and quit.
+Arrow keys or WASD move and attack (hold one to keep walking, up to a wall or a warning), space waits a turn,
+R chooses a new hero after death. G picks up what you stand on, I opens your pack (a letter uses, wears or
+takes off an item), X drops an item, C casts a spell (a letter picks it, then a direction aims it if it needs
+aiming), L looks around (move the cursor to see what is on a tile, and how a monster's fight with you would
+go), M shows the last 100 messages, V turns the music off, then all sound, then both back on, F (or F11, or
+Alt+Enter) toggles full screen, and Escape closes a panel or opens the menu, where you can see the keys and
+high scores or save and quit.
 
 Quitting, or closing the window, saves the run; continuing it deletes the save, and dying ends it for good.
 The top 10 runs are kept with their class, depth and cause of death. Both live in your user config folder
@@ -80,6 +82,15 @@ Walk into the merchant to buy one of five wares, as good as a vault's, or pay to
 cured too) or to have your potions and scrolls named (25 gold a kind). Shopping takes no time.
 
 Your score is 100 per floor reached, 10 per kill, 50 per level gained, and all the gold you found, spent or not.
+
+## macOS app
+
+    ./mac/app.sh
+    open Underwick.app
+
+builds `Underwick.app`, so the game shows in the Dock with its own icon. macOS takes an app's icon from its
+bundle, so a plain `go run .` gets a generic one. Like the browser build, the app embeds the sprites and is
+gitignored.
 
 ## Browser
 

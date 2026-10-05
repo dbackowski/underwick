@@ -4,3 +4,5 @@
 # The browser build embeds the Oryx sprites too. See README.
 /web/underwick.wasm
 /web/wasm_exec.js
+# The Mac app embeds the Oryx sprites too.
+/Underwick.app/
