@@ -14,9 +14,11 @@ desktop as below.
 
 ## Setup
 
-The sprites and font are from Oryx Design Lab's [8-Bit Remaster](https://www.oryxdesignlab.com/products/p/lofi-fantasy-remaster) pack and are not in this repo (license). Copy them in before building:
+The sprites and font are from Oryx Design Lab's [8-Bit Remaster](https://www.oryxdesignlab.com/products/p/lofi-fantasy-remaster) pack and are not in this repo (license). Without them the game still builds and plays, drawn
+in coloured letters the way the old roguelikes were: `@` is you, `#` a wall, `!` a potion (`go run . -ascii` plays
+it that way even with the art in). For the art, copy the pack in before building:
 
-    cp -R path/to/oryx_8-bit_remaster/Sliced assets
+    cp -R path/to/oryx_8-bit_remaster/Sliced/. assets/
     cp path/to/oryx_8-bit_remaster/oryx-simplex.ttf assets/
 
 ## Run

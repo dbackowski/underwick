@@ -12,8 +12,11 @@ A turn-based roguelike in Go with Ebitengine, all in package `main`. `README.md`
 
 ## Assets
 
-- `assets/` holds the Oryx sprites and font. They are licensed, gitignored, and must never be committed or uploaded.
-  They are embedded, so nothing builds or tests without them.
+- `assets/` holds the Oryx sprites and font. They are licensed, gitignored (all but `assets/README.md`), and must
+  never be committed or uploaded. Without them the game draws each sprite as a coloured letter (`letters.go`,
+  worked out from the sprite's name) and uses Go Mono for text, so it builds and tests anywhere; `-ascii` does the
+  same with the art in. A new sprite name needs a letter in `lookOf`; `TestSpritesExist` checks both. Tests that
+  need the art skip without it.
 - `audio/` is CC0 (Juhani Junkala) and is committed.
 - The Oryx pack files its walking frames under the wrong directions; `walkFrames` in `main.go` maps them back.
 

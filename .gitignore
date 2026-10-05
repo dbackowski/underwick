@@ -1,5 +1,7 @@
-# Oryx sprites: licensed, must not be redistributed. See README.
-/assets/
+# Oryx sprites: licensed, must not be redistributed. See README. Only the folder's README is kept, so the
+# game builds without them.
+/assets/*
+!/assets/README.md
 /underwick
 # The browser build embeds the Oryx sprites too. See README.
 /web/underwick.wasm

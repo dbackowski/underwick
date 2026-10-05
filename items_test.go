@@ -96,7 +96,8 @@ func TestStocking(t *testing.T) {
 	}
 }
 
-// Every sprite the game names must exist in the embedded assets, or drawing it panics mid-game.
+// Every sprite the game names must have a letter, and, with the Oryx files in, a file, or drawing it fails
+// mid-game.
 func TestSpritesExist(t *testing.T) {
 	var names []string
 	for _, k := range kinds {
@@ -115,14 +116,25 @@ func TestSpritesExist(t *testing.T) {
 	}
 	names = append(names, "World/"+gold.Sprite, "World/"+goldKey.Sprite, "World/"+blueKey.Sprite,
 		"Character/"+hero.Name+"_idle_d_1", "FX/arrow_x", "FX/arrow_y", "Character/dwarf_idle_d_1", "Character/dwarf_idle_d_2")
+	for _, c := range classes {
+		names = append(names, "Character/"+c.Name+"_idle_d_1")
+	}
+	for _, st := range []string{"sleep", "confuse", "poisoned", "alert"} {
+		names = append(names, "FX/status_"+st+"_1", "FX/status_"+st+"_2")
+	}
 	for _, c := range "#.>+/1425~=%^&0" {
 		names = append(names, "World/"+tileSprite(byte(c), themes[0], 1))
 	}
 	for _, th := range themes {
 		names = append(names, "World/floor_"+th.floor, "World/wall_block_"+th.wall, "World/stair_down_"+th.wall)
 	}
+	_, err := assets.Open("assets/Character")
+	oryx := err == nil
 	for _, n := range names {
-		if _, err := assets.Open("assets/" + n + ".png"); err != nil {
+		if _, ok := lookOf(n); !ok {
+			t.Errorf("no letter for sprite %s", n)
+		}
+		if _, err := assets.Open("assets/" + n + ".png"); oryx && err != nil {
 			t.Errorf("missing sprite %s", n)
 		}
 	}
@@ -179,6 +191,9 @@ func TestShop(t *testing.T) {
 // TestWalkFrames checks walkFrames against the art: each hero's walking frames for a direction should look
 // most like its idle frame facing that way.
 func TestWalkFrames(t *testing.T) {
+	if _, err := assets.Open("assets/Character"); err != nil {
+		t.Skip("needs the Oryx files")
+	}
 	load := func(name string) image.Image {
 		f, err := assets.Open("assets/Character/" + name + ".png")
 		if err != nil {

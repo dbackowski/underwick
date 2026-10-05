@@ -23,6 +23,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+	"golang.org/x/image/font/gofont/gomono"
 )
 
 const (
@@ -70,6 +71,7 @@ var themes = []theme{
 
 var (
 	shot    = flag.String("shot", "", "save one rendered frame to this PNG and exit, to check rendering without a screen capture")
+	ascii   = flag.Bool("ascii", false, "draw everything as coloured letters, as the game does without the Oryx art")
 	iconset = flag.String("iconset", "", "write the app icon in every size into this .iconset folder and exit, for mac/app.sh")
 	font    *text.GoTextFace // text at the base scale, for measuring; see faceAt for drawing
 	fontSrc *text.GoTextFaceSource
@@ -113,6 +115,9 @@ type Game struct {
 // The folder stays in the key because Bosses/ and Character/ share names (cyclops, demon).
 func loadSprites() map[string]*ebiten.Image {
 	sprites := map[string]*ebiten.Image{}
+	if !oryx() {
+		return sprites // every sprite is drawn as its letter, see glyph
+	}
 	err := fs.WalkDir(assets, "assets", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".png") {
 			return err
@@ -135,10 +140,16 @@ func loadSprites() map[string]*ebiten.Image {
 	return sprites
 }
 
+// oryx reports whether to draw with the Oryx art: it is in assets/, and -ascii doesn't turn it off.
+func oryx() bool {
+	_, err := assets.Open("assets/Character")
+	return err == nil && !*ascii
+}
+
 func loadFont() *text.GoTextFace {
 	data, err := assets.ReadFile("assets/oryx-simplex.ttf")
-	if err != nil {
-		log.Fatal(err)
+	if err != nil || !oryx() {
+		data = gomono.TTF
 	}
 	src, err := text.NewGoTextFaceSource(bytes.NewReader(data))
 	if err != nil {
@@ -772,7 +783,9 @@ func (g *Game) drawTitle(screen *ebiten.Image) {
 	if g.notice != "" {
 		g.label(g.notice, ox+8, oy+136, yellow)
 	}
-	g.label("Art by Oryx Design Lab, oryxdesignlab.com", ox+6, float64(screenH-4-lineH-2), grey)
+	if oryx() {
+		g.label("Art by Oryx Design Lab, oryxdesignlab.com", ox+6, float64(screenH-4-lineH-2), grey)
+	}
 }
 
 // drawMenu is the pause menu during a run.
@@ -1122,17 +1135,15 @@ func (g *Game) drawEntity(dst *ebiten.Image, e *Entity, outline color.RGBA) {
 	dst.DrawImage(g.sprite(name), op)
 }
 
-// icon is the warrior, cropped to its outline and enlarged with hard pixel edges to fill most of a
+// icon is the warrior (or its letter, without the Oryx files), cropped to its outline and enlarged with hard pixel edges to fill most of a
 // size×size square, for the window and app icons.
 func icon(size int) image.Image {
-	f, err := assets.Open("assets/Character/warrior_idle_d_1.png")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-	src, err := png.Decode(f)
-	if err != nil {
-		log.Fatal(err)
+	src := glyph("Character/warrior_idle_d_1")
+	if f, err := assets.Open("assets/Character/warrior_idle_d_1.png"); err == nil && oryx() {
+		defer f.Close()
+		if src, err = png.Decode(f); err != nil {
+			log.Fatal(err)
+		}
 	}
 	var b image.Rectangle // the opaque pixels
 	for y := range tile {
@@ -1178,8 +1189,9 @@ func writeIconset(dir string) {
 
 func (g *Game) sprite(name string) *ebiten.Image {
 	img, ok := g.sprites[name]
-	if !ok {
-		panic("missing sprite " + name)
+	if !ok { // no Oryx file for it: its letter, made once
+		img = ebiten.NewImageFromImage(glyph(name))
+		g.sprites[name] = img
 	}
 	return img
 }

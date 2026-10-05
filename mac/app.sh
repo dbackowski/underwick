@@ -1,14 +1,9 @@
 #!/bin/sh
 # Builds Underwick.app, so on macOS the game shows in the Dock with its own icon and name: macOS takes those
 # from an app bundle, which a bare binary (or go run) doesn't have. The icon is the hero sprite, made at
-# build time. The app embeds the Oryx sprites, so it is gitignored like them.
+# build time. The app embeds the Oryx sprites, if they are in, so it is gitignored like them.
 set -eu
 cd "$(dirname "$0")/.."
-
-if [ ! -d assets/Character ]; then
-	echo "assets/ is missing: copy the Oryx sprites in first, see README" >&2
-	exit 1
-fi
 
 app=Underwick.app
 rm -rf "$app"
