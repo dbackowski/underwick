@@ -28,7 +28,10 @@ A turn-based roguelike in Go with Ebitengine, all in package `main`. `README.md`
 
 - `go vet ./... && go test ./...`, and `GOOS=js GOARCH=wasm go vet ./...` for the browser build.
 - `go run . -shot out.png` saves one rendered frame. To check a panel or a scene, temporarily set up the state in
-  `main()`, take the shot, and restore `main.go` afterwards.
+  `main()`, take the shot, and restore `main.go` afterwards. The shot runs the real game, which keeps its save and
+  high scores in the user's config folder: a scene that ends a run records a score and deletes the save, so point
+  `dataDir` at a temporary folder first. The README's screenshots in `docs/screenshots/` were made this way, with
+  the bots from `sim_test.go` copied into a temporary file to play seeded runs.
 - Panels fit about 42 characters a line; check new on-screen text in a screenshot.
 - Before and after any balance change, run `UNDERWICK_SIM=1 go test -run Balance -v` (300 seeded runs per bot,
   about a minute) and compare.

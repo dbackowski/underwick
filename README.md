@@ -6,6 +6,12 @@ dungeon below Underwick as far as you can. Death is permanent, and the dungeon h
 **Play it in your browser: https://dbackowski.github.io/underwick/** (keyboard needed), or build it to run on your
 desktop as below.
 
+<table><tr>
+<td><img src="docs/screenshots/fight.png" alt="A boss and its pack, with the odds of fighting a bat"></td>
+<td><img src="docs/screenshots/shop.png" alt="The merchant's wares"></td>
+<td><img src="docs/screenshots/recap.png" alt="The recap of a dead mage's run"></td>
+</tr></table>
+
 ## Setup
 
 The sprites and font are from Oryx Design Lab's [8-Bit Remaster](https://www.oryxdesignlab.com/products/p/lofi-fantasy-remaster) pack and are not in this repo (license). Copy them in before building:
