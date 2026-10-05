@@ -83,22 +83,22 @@ Your score is 100 per floor reached, 10 per kill, 50 per level gained, and all t
 
 ## Browser
 
+The browser version is on GitHub Pages: https://dbackowski.github.io/underwick/
+
+To build it and run it locally:
+
     GOOS=js GOARCH=wasm go build -o web/underwick.wasm .
     cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/
     python3 -m http.server -d web
 
-then open http://localhost:8000. The build embeds the sprites, which Oryx's license allows in a released game,
-so it stays out of `main` like `assets/`; never upload the `assets/` folder itself. The browser version keeps the
-run and the high scores in the browser's local storage, so they belong to that browser on that device. With nothing
-to quit to, the title screen has no Quit, and Q in the pause menu saves and goes back to the title.
-
-`./web/deploy.sh` builds it and publishes it to the `gh-pages` branch, replacing what was there. Set the repo's
-Settings → Pages to deploy from that branch once, and the game is at https://dbackowski.github.io/underwick/.
-It has to run here rather than in GitHub Actions, which never has the sprites.
+then open http://localhost:8000.
 
 ## Development
 
 `go run . -shot frame.png` saves one rendered frame and exits, for checking rendering.
+
+`./web/deploy.sh` builds the browser version and publishes it to the `gh-pages` branch, which GitHub Pages
+serves. It runs locally because the build needs the sprites, which never go to GitHub.
 
 `UNDERWICK_SIM=1 go test -run Balance -v` plays 300 seeded runs with bots, a stairs-rushing warrior and a
 careful player as every class, and prints how deep they got, for tuning. The bots see the whole floor.
