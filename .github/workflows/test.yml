@@ -1,0 +1,25 @@
+# Checks every push and pull request. CI never has the Oryx art, so this also checks that the game builds
+# and its tests pass without it, drawn in letters.
+name: test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install Ebitengine's Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libc6-dev libgl1-mesa-dev libxcursor-dev libxi-dev libxinerama-dev \
+            libxrandr-dev libxxf86vm-dev libasound2-dev pkg-config
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Browser build
+        run: GOOS=js GOARCH=wasm go vet ./... && GOOS=js GOARCH=wasm go build -o /dev/null .

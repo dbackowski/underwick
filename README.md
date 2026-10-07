@@ -1,5 +1,7 @@
 # Underwick
 
+[![test](https://github.com/dbackowski/underwick/actions/workflows/test.yml/badge.svg)](https://github.com/dbackowski/underwick/actions/workflows/test.yml)
+
 A classic turn-based roguelike built with Go and [Ebitengine](https://ebitengine.org). Go down into the
 dungeon below Underwick as far as you can. Death is permanent, and the dungeon has no bottom.
 

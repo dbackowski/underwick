@@ -29,7 +29,8 @@ A turn-based roguelike in Go with Ebitengine, all in package `main`. `README.md`
 
 ## Checking changes
 
-- `go vet ./... && go test ./...`, and `GOOS=js GOARCH=wasm go vet ./...` for the browser build.
+- `go vet ./... && go test ./...`, and `GOOS=js GOARCH=wasm go vet ./...` for the browser build. GitHub Actions
+  (`.github/workflows/test.yml`) runs these and gofmt on every push, without the Oryx art.
 - `go run . -shot out.png` saves one rendered frame. To check a panel or a scene, temporarily set up the state in
   `main()`, take the shot, and restore `main.go` afterwards. The shot runs the real game, which keeps its save and
   high scores in the user's config folder: a scene that ends a run records a score and deletes the save, so point
