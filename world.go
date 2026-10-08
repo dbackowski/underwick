@@ -401,6 +401,10 @@ func (w *World) descend() {
 		if m.Boss { // each boss after the first gets half its base HP and 1 damage more
 			m.MaxHP += m.MaxHP * (round - 1) / 2
 			m.Dmg += round - 1
+			if round == 1 { // the first boss was where most runs ended, at full strength and with its minions
+				m.MaxHP -= m.MaxHP / 4
+				m.Dmg--
+			}
 			w.say("A %s guards the stairs.", m.Name)
 		} else {
 			m.Kind = m.Kind.at(w.Depth)

@@ -9,7 +9,7 @@ import (
 )
 
 // saveVersion goes up whenever a change to the rules would replay an old save differently.
-const saveVersion = 6
+const saveVersion = 7
 
 // Action is one thing the hero did, enough to do it again: a save is the run's seed, class and actions,
 // replayed on load. The game draws all its chance from the seed, so a replay ends where the run left.

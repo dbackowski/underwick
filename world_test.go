@@ -131,7 +131,7 @@ func TestGenerate(t *testing.T) {
 					t.Fatalf("seed %d depth %d: %s doesn't belong here", seed, depth, k.Name)
 				}
 			}
-			if boss != 0 { // minions stand within 2 steps of the boss
+			if boss != 0 && depth > bossEvery { // minions stand within 2 steps of every boss after the first
 				b, near := strings.IndexByte(all, boss), 0
 				for i, c := range all {
 					if _, ok := kinds[byte(c)]; ok && i != b && abs(i%mapW-b%mapW)+abs(i/mapW-b/mapW) <= 2 {

@@ -201,7 +201,7 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 		// ponytail: the count grows straight to 20 a floor; tune once the game is played
 		pool := spawnable(depth)
 		n := min(4+2*depth, 20, len(spots))
-		if boss != 0 {
+		if boss != 0 && depth > bossEvery { // the first boss stands alone, see descend
 			// Minions stand closest to the boss, so a body dying in the fight has others in reach.
 			slices.SortStableFunc(spots, func(a, b [2]int) int {
 				return abs(a[0]-fx) + abs(a[1]-fy) - abs(b[0]-fx) - abs(b[1]-fy)

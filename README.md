@@ -82,8 +82,8 @@ key lying elsewhere on the floor and a chest of better loot inside.
 Some rooms hold pools that monsters never enter: deep water slows you, giving monsters an extra turn;
 acid burns each turn you stand in it; lava burns badly, so you are warned and must move again to step
 in; and a pit drops you to the next floor, with a fall. Take the stairs down to reach the next floor. Every 5th floor a boss guards the stairs, which open
-when it dies: dragon, beholder, lord, cyclops, demon or reaper, stronger each time round. Its hoard, two
-fine items and gold, spills around the stairs.
+when it dies: dragon, beholder, lord, cyclops, demon or reaper, stronger each time round. The first stands alone, the
+rest with a pack. Its hoard, two fine items and gold, spills around the stairs.
 
 Each floor plays one of five tracks in turn, with its own track while a boss lives and another once you die.
 
