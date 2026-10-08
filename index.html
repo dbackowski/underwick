@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Underwick</title>
+<style>html, body { margin: 0; height: 100%; background: #000; }</style>
+<script src="wasm_exec.js"></script>
+<script>
+  const go = new Go();
+  WebAssembly.instantiateStreaming(fetch("underwick.wasm"), go.importObject).then(r => go.run(r.instance));
+</script>
+</html>
