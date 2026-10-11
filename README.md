@@ -32,13 +32,38 @@ hero to start: the warrior (tough, with a sword), the archer (shoots with a bow)
 casts Fire Bolt), the thief (quiet, so sleeping monsters wake half as often) or the cleric (armoured,
 casts Heal).
 
-Arrow keys or WASD move and attack (hold one to keep walking, up to a wall or a warning), space waits a turn,
-R chooses a new hero after death. G picks up what you stand on, I opens your pack (a letter uses, wears or
-takes off an item), X drops an item, C casts a spell (a letter picks it, then a direction aims it if it needs
-aiming), L looks around (move the cursor to see what is on a tile, and how a monster's fight with you would
-go), M shows the last 100 messages, V turns the music off, then all sound, then both back on, F (or F11, or
-Alt+Enter) switches between full screen, which the game starts in, and a window, and Escape closes a panel or
-opens the menu, where you can see the keys and high scores or save and quit.
+## Keys
+
+In the dungeon:
+
+| Key | Does |
+|---|---|
+| Arrow keys, WASD | Move, or attack a monster in the way. Hold one to keep walking, up to a wall or a warning |
+| Space, . | Wait a turn |
+| G | Pick up what you stand on |
+| I | Open your pack; a letter uses, wears or takes off an item |
+| X | Drop an item; a letter picks it |
+| C | Cast a spell; a letter picks it, then a direction aims it if it needs aiming |
+| L | Look around: move the cursor to see what is on a tile, and how a fight with a monster would go. L or Escape stops |
+| M | Show the last 100 messages |
+| Escape | Close a panel, or open the menu |
+
+Walking into a door opens it, and into a merchant opens the shop: a letter buys, Escape leaves. The messages,
+keys and high scores close with Escape, Space, Enter or M.
+
+Anywhere:
+
+| Key | Does |
+|---|---|
+| V | Sound: music off, then all sound off, then both back on |
+| F, F11, Alt+Enter | Switch between full screen, which the game starts in, and a window |
+
+On the title screen N starts a new game, C continues a saved one, H shows the high scores, K the keys, and Q or
+Escape quits (not in the browser). A hero is picked by its letter. The menu (Escape in the dungeon) shows the
+keys (K) and high scores (H), or saves and quits (Q; in the browser, back to the title screen). After death, R
+picks a new hero and Escape goes back to the title screen.
+
+## Playing
 
 Quitting, or closing the window, saves the run; continuing it deletes the save, and dying ends it for good.
 The top 10 runs are kept with their class, depth and cause of death. Both live in your user config folder
