@@ -244,7 +244,8 @@ func (w *World) botItems() bool {
 		if w.Mana < s.Cost {
 			continue
 		}
-		if s.Name == "heal" && p.HP*2 < p.MaxHP {
+		// With full mana, resting to heal gains nothing more: cast, or tactician waits forever.
+		if s.Name == "heal" && (p.HP*2 < p.MaxHP || w.Mana == w.MaxMana && p.HP < p.MaxHP) {
 			w.Cast(i, 0, 0)
 			return true
 		}
