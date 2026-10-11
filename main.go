@@ -886,10 +886,10 @@ func (g *Game) drawSpells(screen *ebiten.Image) {
 	g.label(fmt.Sprintf("Cast which? You have %d mana. (Esc to close)", w.Mana), 6, 4, yellow)
 	for i, s := range w.Spells {
 		c := white
-		if s.Cost > w.Mana {
+		if w.cost(s) > w.Mana {
 			c = grey
 		}
-		g.label(fmt.Sprintf("%c) %s, %d mana", 'a'+i, s.Name, s.Cost), 6, 4+float64(i+1)*lineH+2, c)
+		g.label(fmt.Sprintf("%c) %s, %d mana", 'a'+i, s.Name, w.cost(s)), 6, 4+float64(i+1)*lineH+2, c)
 	}
 }
 

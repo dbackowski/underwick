@@ -30,6 +30,7 @@ var classes = []*Class{
 type Spell struct {
 	Name  string
 	Cost  int
+	Full  bool // takes all the hero's mana instead, and needs it full
 	Aimed bool // cast in a direction
 	cast  func(w *World, dx, dy int)
 }
@@ -46,9 +47,9 @@ var spells = []*Spell{
 		w.say("The fire bolt hits the %s.", t.Name)
 		w.damage(t, 2+w.rng.IntN(4)+w.ExpLevel/2)
 	}},
-	{Name: "heal", Cost: 10, cast: func(w *World, dx, dy int) {
+	{Name: "heal", Full: true, cast: func(w *World, dx, dy int) {
 		p := w.Player
-		w.heal(p, 4+w.ExpLevel)
+		w.heal(p, w.healing())
 		p.Poison = 0
 		w.say("You feel better.")
 	}},
@@ -58,6 +59,18 @@ var spells = []*Spell{
 func spellNamed(name string) *Spell {
 	return spells[slices.IndexFunc(spells, func(s *Spell) bool { return s.Name == name })]
 }
+
+// cost is the mana a spell takes. Heal takes a full measure of it: at a set price a hero's growing mana
+// bought more Heals every few levels, each one larger, and the cleric outlasted every other class.
+func (w *World) cost(s *Spell) int {
+	if s.Full {
+		return w.MaxMana
+	}
+	return s.Cost
+}
+
+// healing is how much HP a Heal restores.
+func (w *World) healing() int { return 4 + w.ExpLevel }
 
 // manaEvery is how many turns it takes to regain 1 mana, while hunted.
 const manaEvery = 5
@@ -69,12 +82,13 @@ func (w *World) Cast(i, dx, dy int) {
 		return
 	}
 	s := w.Spells[i]
-	if w.Mana < s.Cost {
+	cost := w.cost(s)
+	if w.Mana < cost {
 		w.Log = []string{"You don't have the mana for that."}
 		return
 	}
 	w.turn(func() {
-		w.Mana -= s.Cost
+		w.Mana -= cost
 		w.Player.Anim = "atk"
 		if s.Aimed {
 			w.Player.Dir = dirName(dx, dy)

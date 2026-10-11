@@ -29,7 +29,7 @@ func TestClasses(t *testing.T) {
 			}
 		}
 		for _, s := range w.Spells {
-			if s.Cost > c.Mana {
+			if w.cost(s) > w.Mana {
 				t.Fatalf("%s should start with the mana to cast %s", c.Name, s.Name)
 			}
 		}
@@ -65,6 +65,14 @@ func TestSpells(t *testing.T) {
 	w.Cast(0, 0, 0)
 	if w.Player.HP <= 3 || w.Player.Poison != 0 {
 		t.Fatalf("heal should restore HP and cure poison, got HP %d poison %d", w.Player.HP, w.Player.Poison)
+	}
+	if w.Mana != 0 {
+		t.Fatalf("heal should take all the mana, left %d", w.Mana)
+	}
+	w.Mana, w.Player.HP = w.MaxMana-1, 3
+	w.Cast(0, 0, 0)
+	if w.Player.HP != 3 {
+		t.Fatal("heal should need full mana")
 	}
 
 	w = runAs(classNamed("mage"), "###", "#@#", "###")

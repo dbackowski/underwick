@@ -83,7 +83,7 @@ func diver(w *World) (int, int) {
 
 // tactician plays the way a careful player would: it strikes whatever it can reach, lets melee
 // monsters walk up to it so it hits first, charges shooters rather than standing in their line,
-// and, knowing Heal, rests for the mana to cast it when hurt and nothing is hunting it.
+// and, knowing Heal, casts it when hurt (botItems).
 func tactician(w *World) (int, int) {
 	p := w.Player
 	if dx, dy := w.botStrike(); dx != 0 || dy != 0 {
@@ -234,13 +234,15 @@ func (w *World) botShop() bool {
 // anything better than what it has on, and reading unknown scrolls when nothing is hunting it.
 func (w *World) botItems() bool {
 	p := w.Player
+	hunter := w.nearest(func(m *Entity) bool { return m.hunting })
 	// Magic first: heal when hurt, and bolt anything in line.
 	for i, s := range w.Spells {
-		if w.Mana < s.Cost {
+		if w.Mana < w.cost(s) {
 			continue
 		}
-		// With full mana, resting to heal gains nothing more: cast, or tactician waits forever.
-		if s.Name == "heal" && (p.HP*2 < p.MaxHP || w.Mana == w.MaxMana && p.HP < p.MaxHP) {
+		// Heal takes all the mana, so spend it when none of it would spill: in a fight once under
+		// half HP, or as soon as nothing is hunting.
+		if s.Name == "heal" && p.MaxHP-p.HP >= w.healing() && (p.HP*2 < p.MaxHP || hunter == nil) {
 			w.Cast(i, 0, 0)
 			return true
 		}
@@ -253,7 +255,7 @@ func (w *World) botItems() bool {
 			}
 		}
 	}
-	safe := w.nearest(func(m *Entity) bool { return m.hunting }) == nil
+	safe := hunter == nil
 	if safe && w.botShop() {
 		return true
 	}
