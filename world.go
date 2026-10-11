@@ -710,7 +710,8 @@ func (w *World) canSee(x0, y0, x1, y1 int) bool {
 
 // stepToward returns a first step on a shortest path from x, y to gx, gy: onto a free tile, or into
 // a closed door to open it. Paths go around walls, locked doors, chests and hazards, but through
-// creatures, so a monster stuck behind another one waits its turn rather than detouring.
+// creatures, so a monster stuck behind another one waits its turn rather than detouring. The start may
+// itself be a hazard, after a stumble while confused; otherwise nothing could path out of it.
 func (w *World) stepToward(x, y, gx, gy int) (dx, dy int, ok bool) {
 	// Breadth-first search outward from the goal until it reaches the start.
 	dist := map[[2]int]int{{gx, gy}: 0}
@@ -718,7 +719,7 @@ func (w *World) stepToward(x, y, gx, gy int) (dx, dy int, ok bool) {
 		c := queue[0]
 		for _, d := range dirs {
 			n := [2]int{c[0] + d[0], c[1] + d[1]}
-			if _, seen := dist[n]; !seen && w.passable(w.Level[n[1]][n[0]]) {
+			if _, seen := dist[n]; !seen && (n == [2]int{x, y} || w.passable(w.Level[n[1]][n[0]])) {
 				dist[n] = dist[c] + 1
 				queue = append(queue, n)
 			}
