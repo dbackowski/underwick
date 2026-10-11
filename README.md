@@ -63,9 +63,9 @@ Kills give experience. Going from level l to the next takes 5 x l x l, and each 
 1 accuracy, plus 1 damage every 2nd level and 1 armour every 3rd.
 
 With a bow in hand, moving toward a monster in a straight line within 5 tiles shoots it. Spells cost mana,
-which comes back 1 every 5 turns and grows with levels: Fire Bolt hits the first monster in a line, Heal
-restores HP and cures poison, and Sleep puts the monsters you can see to sleep. Tomes teach spells, and
-give a hero without magic some mana.
+which comes back 1 every 5 turns while a monster hunts you, and in full on each new floor, and grows with
+levels: Fire Bolt hits the first monster in a line, Heal restores HP and cures poison, and Sleep puts the
+monsters you can see to sleep. Tomes teach spells, and give a hero without magic some mana.
 
 Items lie about the floors, better ones deeper: weapons (dagger, sword, staff, spear, axe, hammer, bow), armour
 for the head, body, hands and feet, shields, rings, an amulet, potions, scrolls and tomes. Each hero starts

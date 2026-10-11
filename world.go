@@ -397,6 +397,7 @@ func (w *World) descend() {
 	w.load(generate(w.rng, w.Depth, boss))
 	w.settle()
 	w.say("Deep %d.", w.Depth)
+	w.Mana = w.MaxMana // a fresh floor, a full tank: mana no longer comes back while resting
 	for _, m := range w.Monsters {
 		if m.Boss { // each boss after the first gets half its base HP and 1 damage more
 			m.MaxHP += m.MaxHP * (round - 1) / 2
@@ -543,7 +544,9 @@ func (w *World) turn(act func()) {
 		w.idle = 0
 		w.wander()
 	}
-	if w.Mana < w.MaxMana {
+	// Mana comes back only while a monster hunts the hero: resting in peace would turn time into Heal
+	// after Heal, with no limit on HP between fights.
+	if w.Mana < w.MaxMana && slices.ContainsFunc(w.Monsters, func(m *Entity) bool { return m.hunting }) {
 		if w.manaIn++; w.manaIn >= manaEvery {
 			w.manaIn = 0
 			w.Mana++

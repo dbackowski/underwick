@@ -98,11 +98,6 @@ func tactician(w *World) (int, int) {
 			return 0, 0 // it closes in this turn; waiting gives us the first hit
 		}
 	}
-	sealed := !strings.Contains(strings.Join(w.Level, ""), ">")
-	healer := slices.ContainsFunc(w.Spells, func(s *Spell) bool { return s.Name == "heal" })
-	if hunter == nil && healer && (p.HP*3 < p.MaxHP*2 || sealed && p.HP < p.MaxHP) {
-		return 0, 0 // rest for the mana to heal, and before a boss heal to full
-	}
 	if hunter == nil && len(w.Inventory) < maxItems {
 		// Keep going for the item it set out for, even once it drops out of sight; otherwise pick
 		// the first one in view.

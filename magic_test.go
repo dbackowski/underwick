@@ -129,9 +129,9 @@ func TestStatuses(t *testing.T) {
 
 func TestTomesAndMana(t *testing.T) {
 	w := NewWorld([]string{
-		"###",
-		"#@#",
-		"###",
+		"#####",
+		"#@#z#",
+		"#####",
 	})
 	w.Inventory = append(w.Inventory, &Item{ItemKind: kindNamed("tome of heal")})
 	w.Use(1)
@@ -142,8 +142,16 @@ func TestTomesAndMana(t *testing.T) {
 	for range manaEvery * 2 {
 		w.Step(0, 0)
 	}
+	if w.Mana != 0 {
+		t.Fatalf("mana should not come back while nothing hunts the hero, got %d", w.Mana)
+	}
+	z := w.Monsters[0] // walled off, so it hunts without ever arriving
+	z.hunting, z.goalX, z.goalY = true, w.Player.X, w.Player.Y
+	for range manaEvery * 2 {
+		w.Step(0, 0)
+	}
 	if w.Mana != 2 {
-		t.Fatalf("mana should come back 1 every %d turns, got %d", manaEvery, w.Mana)
+		t.Fatalf("mana should come back 1 every %d turns while hunted, got %d", manaEvery, w.Mana)
 	}
 	max := w.MaxMana
 	w.gainXP(xpFor(1))

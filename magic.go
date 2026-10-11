@@ -59,7 +59,7 @@ func spellNamed(name string) *Spell {
 	return spells[slices.IndexFunc(spells, func(s *Spell) bool { return s.Name == name })]
 }
 
-// manaEvery is how many turns it takes to regain 1 mana.
+// manaEvery is how many turns it takes to regain 1 mana, while hunted.
 const manaEvery = 5
 
 // Cast casts a known spell, in direction dx, dy if it is aimed. It takes a turn if there was the mana.
