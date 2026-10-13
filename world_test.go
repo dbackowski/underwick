@@ -14,8 +14,8 @@ func TestCombat(t *testing.T) {
 		t.Fatalf("hero vs orc should hit 70%% of the time, got %d", got)
 	}
 	a.Atk, a.Def, d.Def = 100, 100, 0
-	if hitChance(a, d) != 95 || hitChance(d, a) != 5 {
-		t.Fatal("hit chance should stay between 5% and 95%")
+	if hitChance(a, d) != 95 || hitChance(d, a) != 20 {
+		t.Fatal("hit chance should stay between 20% and 95%")
 	}
 
 	// Hitting until the rat dies: every hit deals 1 to the hero's damage (sword included), and the kill

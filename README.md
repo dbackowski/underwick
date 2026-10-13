@@ -72,7 +72,7 @@ after every turn. A save is replayed from your moves, so one made before an upda
 refused.
 
 Walk into a monster to attack it. A hit lands 70% of the time, plus 5% for each point of your accuracy over
-its armour, and deals 1 up to your weapon's damage. HP never comes back on its own: only
+its armour (never under 20% or over 95%, for you or for a monster), and deals 1 up to your weapon's damage. HP never comes back on its own: only
 potions, the Heal spell and the merchant restore it, and gaining a level restores all of it.
 
 Monsters within 6 tiles notice you only if they can see you, then hunt you down to where they last saw you.

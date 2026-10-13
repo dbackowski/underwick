@@ -760,12 +760,14 @@ func (w *World) firstInLine(from *Entity, dx, dy, n int) *Entity {
 }
 
 // hitChance is the percent chance that a's attack lands on t: 70%, plus 5% per point of accuracy
-// over the target's armour, never certain either way, except against a sleeper.
+// over the target's armour, never certain either way, except against a sleeper. It stops at 20%: down to
+// 5%, a hero's armour outgrew the monsters' accuracy by floor 15, where they hit 14% of the time, and
+// whoever got that deep hardly died any more.
 func hitChance(a, t *Entity) int {
 	if t.Sleep != 0 {
 		return 100
 	}
-	return min(max(70+5*(a.Atk-t.Def), 5), 95)
+	return min(max(70+5*(a.Atk-t.Def), 20), 95)
 }
 
 func (w *World) attack(a, t *Entity) {
