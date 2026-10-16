@@ -68,6 +68,29 @@ func TestScrolls(t *testing.T) {
 	if w.Inventory[0].Plus != 1 || w.Player.Dmg != hero.Dmg+4+1 {
 		t.Fatalf("enchanting should make the sword +1, got %+v", w.Inventory[0])
 	}
+
+	w = NewWorld([]string{"#####", "#@.o#", "#####"})
+	orc := w.Monsters[0]
+	w.Inventory = append(w.Inventory, &Item{ItemKind: kindNamed("scroll of fire")})
+	w.Use(1)
+	if orc.HP >= orc.MaxHP {
+		t.Fatal("a scroll of fire should burn the orc in sight")
+	}
+
+	w = roomWith()
+	w.Inventory = append(w.Inventory, &Item{ItemKind: kindNamed("potion of healing")}, &Item{ItemKind: kindNamed("scroll of identify")})
+	w.Use(2)
+	if got := w.ItemName(w.Inventory[1]); got != "potion of healing" {
+		t.Fatalf("a scroll of identify should name the potion carried, got %q", got)
+	}
+
+	// Past the door there is floor out of sight, far enough off for a monster to come from.
+	w = NewWorld([]string{"###############", "#@.......+....#", "###############"})
+	w.Inventory = append(w.Inventory, &Item{ItemKind: kindNamed("scroll of summoning")})
+	w.Use(1)
+	if len(w.Monsters) != 1 || !w.Monsters[0].hunting {
+		t.Fatalf("a scroll of summoning should bring a monster on the hero's trail, got %d", len(w.Monsters))
+	}
 }
 
 func TestGold(t *testing.T) {

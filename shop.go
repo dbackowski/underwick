@@ -51,6 +51,15 @@ func (w *World) unknownCarried() []*ItemKind {
 	return ks
 }
 
+// nameCarried names every potion and scroll kind the hero carries, and reports how many were new.
+func (w *World) nameCarried() int {
+	ks := w.unknownCarried()
+	for _, k := range ks {
+		w.known[k] = true
+	}
+	return len(ks)
+}
+
 // nextToShop reports whether the hero stands beside the merchant.
 func (w *World) nextToShop() bool {
 	p := w.Player
@@ -94,9 +103,7 @@ func (w *World) Buy(i int) {
 		w.Player.HP, w.Player.Poison = w.Player.MaxHP, 0
 		w.say("The merchant patches you up.")
 	case buyIdentify:
-		for _, k := range w.unknownCarried() {
-			w.known[k] = true
-		}
+		w.nameCarried()
 		w.say("The merchant tells you what you carry.")
 	default:
 		it := w.Wares[i]

@@ -100,13 +100,34 @@ var itemKinds = []*ItemKind{
 	{Name: "scroll of enchant armour", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) {
 		w.enchant(func(it *Item) bool { return it.Def > 0 && it.Slot != "ring" }, "armour")
 	}},
+	{Name: "scroll of identify", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) {
+		if w.nameCarried() == 0 {
+			w.say("You learn nothing new.")
+			return
+		}
+		w.say("You know what you carry now.")
+	}},
+	// The bad one among the scrolls, as poison is among the potions: reading unknown ones has a price.
+	{Name: "scroll of summoning", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 1, use: func(w *World) {
+		w.wander()
+		w.say("Something answers, far off.")
+	}},
 }
 
 // Tomes teach spells, and are never disguised. They join itemKinds here rather than in its literal:
 // learning reaches the spells, a spell can kill a boss, and a boss's loot is rolled from itemKinds,
-// which Go would refuse as an initialization cycle.
+// which Go would refuse as an initialization cycle. The scroll of fire can kill a boss too.
 func init() {
 	itemKinds = append(itemKinds,
+		// The way out of a fight gone wrong: it burns everything in sight, harder on deeper floors.
+		&ItemKind{Name: "scroll of fire", Sprite: "object_scroll", Class: 's', Depth: 2, Weight: 1, use: func(w *World) {
+			w.say("Flames burst out around you.")
+			for _, m := range slices.Clone(w.Monsters) { // a death takes it out of w.Monsters
+				if w.Visible[m.Y][m.X] {
+					w.damage(m, 4+w.rng.IntN(4)+w.Depth/2)
+				}
+			}
+		}},
 		&ItemKind{Name: "tome of fire bolt", Sprite: "object_tome_brown", Class: 't', Depth: 2, Weight: 1, use: learn("fire bolt")},
 		&ItemKind{Name: "tome of heal", Sprite: "object_tome_blue", Class: 't', Depth: 2, Weight: 1, use: learn("heal")},
 		&ItemKind{Name: "tome of sleep", Sprite: "object_tome_green", Class: 't', Depth: 2, Weight: 1, use: learn("sleep")},
@@ -116,7 +137,7 @@ func init() {
 // The faces unidentified potions and scrolls wear; each run shuffles which kind gets which.
 var (
 	potionColours = []string{"red", "blue", "green"}
-	scrollLabels  = []string{"ZELGO MER", "FOOBIE BLETCH", "XIXAXA", "VERR YED HORRE", "ELAM EBOW", "DAIYEN FOOELS"}
+	scrollLabels  = []string{"ZELGO MER", "FOOBIE BLETCH", "XIXAXA", "VERR YED HORRE", "ELAM EBOW", "DAIYEN FOOELS", "KERNOD WEL", "GARVEN DEH"}
 )
 
 const maxItems = 20 // how many items the hero can carry
