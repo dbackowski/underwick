@@ -117,6 +117,24 @@ func TestSleep(t *testing.T) {
 	if w.Monsters[0].Sleep != -1 {
 		t.Fatal("a sleeper that can't see the hero should never wake")
 	}
+
+	// A third of a floor starts asleep, and two thirds for the quiet thief.
+	for _, c := range []struct {
+		class    string
+		min, max int
+	}{{"warrior", 5, 15}, {"thief", 15, 25}} {
+		w := runAs(classNamed(c.class), "################################", "#@oooooooooooooooooooooooooooooo#", "################################")
+		w.settle()
+		n := 0
+		for _, m := range w.Monsters {
+			if m.Sleep != 0 {
+				n++
+			}
+		}
+		if n < c.min || n > c.max {
+			t.Fatalf("%s should find %d-%d of 30 monsters asleep, got %d", c.class, c.min, c.max, n)
+		}
+	}
 }
 
 func TestStatuses(t *testing.T) {

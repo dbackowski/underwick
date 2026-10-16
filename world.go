@@ -290,10 +290,16 @@ func (w *World) wander() {
 	w.Monsters = append(w.Monsters, m)
 }
 
-// settle sends a third of a new floor's monsters to sleep, until something wakes them.
+// settle sends a third of a new floor's monsters to sleep, until something wakes them, and two thirds
+// for a quiet hero: waking half as often alone, a third of the floor asleep, did nothing for the thief,
+// which scored as well without it and fell behind every other class.
 func (w *World) settle() {
+	asleep := 1
+	if w.Class != nil && w.Class.Stealth {
+		asleep = 2
+	}
 	for _, m := range w.Monsters {
-		if !m.Boss && w.rng.IntN(3) == 0 {
+		if !m.Boss && w.rng.IntN(3) < asleep {
 			m.Sleep = -1
 		}
 	}

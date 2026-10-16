@@ -29,8 +29,8 @@ it that way even with the art in). For the art, copy the pack in before building
 
 The title screen starts a new game, continues a saved one, or shows the high scores and the keys. Pick a
 hero to start: the warrior (tough, with a sword), the archer (shoots with a bow), the mage (frail,
-casts Fire Bolt), the thief (quiet, so sleeping monsters wake half as often) or the cleric (armoured,
-casts Heal).
+casts Fire Bolt), the thief (quiet, so twice as many monsters are asleep when it comes, and they wake
+half as often) or the cleric (armoured, casts Heal).
 
 ## Keys
 
@@ -77,7 +77,7 @@ potions, the Heal spell and the merchant restore it, and gaining a level restore
 
 Monsters within 6 tiles notice you only if they can see you, then hunt you down to where they last saw you.
 Every 150 turns or so another monster wanders onto the floor out of sight and comes looking for you, so
-waiting has a price. A third of the floor's own monsters start asleep, waking only by chance once they could see you, or when hit; a sleeper is
+waiting has a price. A third of the floor's own monsters start asleep (two thirds for the thief), waking only by chance once they could see you, or when hit; a sleeper is
 always hit. Snakes and spiders can poison you (1 HP a turn), and imps and ghosts can confuse you (half
 your moves go astray).
 Twenty kinds live at different depths, from rats and bats on floor 1 to flayers and demons below floor 12;

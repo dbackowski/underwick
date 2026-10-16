@@ -10,7 +10,7 @@ type Class struct {
 	Start   []string // items it starts with, all in use
 	Spells  []string
 	Mana    int
-	Stealth bool // sleeping monsters wake half as often
+	Stealth bool // twice as many monsters start asleep, and wake half as often
 }
 
 var classes = []*Class{
@@ -21,7 +21,7 @@ var classes = []*Class{
 	{Kind: Kind{Name: "mage", MaxHP: 14, Atk: 1, Dmg: 1, Moves: 1, Range: 1},
 		Start: []string{"staff"}, Spells: []string{"fire bolt"}, Mana: 15, About: "Frail, but casts Fire Bolt."},
 	{Kind: Kind{Name: "thief", MaxHP: 16, Atk: 3, Def: 1, Dmg: 2, Moves: 1, Range: 1},
-		Start: []string{"dagger", "boots"}, Stealth: true, About: "Quiet: sleepers wake half as often."},
+		Start: []string{"dagger", "boots"}, Stealth: true, About: "Quiet: twice as many monsters asleep."},
 	{Kind: Kind{Name: "cleric", MaxHP: 16, Def: 2, Dmg: 1, Moves: 1, Range: 1},
 		Start: []string{"hammer"}, Spells: []string{"heal"}, Mana: 10, About: "Armoured, and casts Heal."},
 }
