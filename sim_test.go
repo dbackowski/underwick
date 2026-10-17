@@ -33,8 +33,11 @@ func TestBalance(t *testing.T) {
 		var depths []int
 		var score, turns, stuck int
 		deaths := make([]int, 16) // by depth; the last bucket counts everything deeper
+		// What ends a run on floors 1-3, and in what state, to tell a bad start from a bad fight.
+		early, earlyLevel, earlyAround := map[string]int{}, 0, 0
 		for seed := range uint64(runs) {
 			w := NewGame(seed, b.class)
+			lastDrunk = ""
 			n := 0
 			for ; !w.Over && n < 20000; n++ {
 				if b.name != "diver" && w.botItems() {
@@ -55,10 +58,36 @@ func TestBalance(t *testing.T) {
 			score += w.Score()
 			turns += n
 			deaths[min(w.Depth, len(deaths))-1]++
+			if w.Over && w.Depth <= 3 {
+				if w.Cause == "poison" && lastDrunk == "potion of poison" {
+					early["a potion of poison"]++
+				} else {
+					early[w.Cause]++
+				}
+				earlyLevel += w.ExpLevel
+				for _, m := range w.Monsters {
+					if m.HP > 0 && max(abs(m.X-w.Player.X), abs(m.Y-w.Player.Y)) <= 1 {
+						earlyAround++
+					}
+				}
+			}
 		}
 		slices.Sort(depths)
 		t.Logf("%-14s stuck %d  depth median %d, best %d  score avg %d  turns/run %d  potions/run %.1f  armour worn at death %.1f  deaths by depth %v",
 			b.name, stuck, depths[runs/2], depths[runs-1], score/runs, turns/runs, float64(potionsDrunk)/runs, float64(gear)/runs, deaths)
+		if len(early) > 0 {
+			var causes []string
+			for c, k := range early {
+				causes = append(causes, fmt.Sprintf("%s %d", c, k))
+			}
+			slices.Sort(causes) // map order would shuffle the log between runs
+			dead := 0
+			for _, k := range early {
+				dead += k
+			}
+			t.Logf("%-14s floors 1-3: %d deaths, level %.1f, %.1f monsters adjacent; by %s", "", dead,
+				float64(earlyLevel)/float64(dead), float64(earlyAround)/float64(dead), strings.Join(causes, ", "))
+		}
 		if b.name != "diver" {
 			var visits []string
 			for d := range 30 {
@@ -181,6 +210,7 @@ func (w *World) botToStairs() (int, int) {
 
 var (
 	potionsDrunk int                  // counted across a bot's runs
+	lastDrunk    string               // the potion the bot drank last this run, to blame poison on
 	botTarget    = map[*World]*Item{} // the item the tactician is walking to
 	botShopped   = map[*World]int{}   // the floor the tactician last finished shopping on
 	botVisited   = map[*World]int{}   // the floor the tactician last reached a merchant on
@@ -270,6 +300,7 @@ func (w *World) botItems() bool {
 		}
 		if best >= 0 {
 			potionsDrunk++
+			lastDrunk = w.Inventory[best].Name
 			w.Use(best)
 			return true
 		}
