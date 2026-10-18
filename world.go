@@ -49,7 +49,7 @@ var kinds = map[byte]Kind{
 	'j': {Name: "slime", Depth: 2, XP: 3, MaxHP: 10, Dmg: 2, Moves: 1, Range: 1},                              // soaks up hits
 	'g': {Name: "gobwar", Depth: 2, XP: 5, MaxHP: 8, Atk: 1, Def: 1, Dmg: 4, Moves: 1, Range: 1},              // goblin warrior
 	'a': {Name: "gobarcher", Depth: 2, XP: 5, MaxHP: 6, Atk: 1, Dmg: 3, Moves: 1, Range: 5, Missile: "arrow"}, // shoots down a line
-	'w': {Name: "wolf", Depth: 3, XP: 7, MaxHP: 8, Atk: 2, Dmg: 4, Moves: 2, Range: 1},                        // fast
+	'w': {Name: "wolf", Depth: 3, XP: 7, MaxHP: 8, Atk: 2, Dmg: 3, Moves: 2, Range: 1},                        // fast, so it bites lightly: two bites of 4 outhit an orc
 	'k': {Name: "skel", Depth: 4, XP: 8, MaxHP: 12, Atk: 2, Def: 2, Dmg: 5, Moves: 1, Range: 1},               // skeleton
 	'p': {Name: "spider", Depth: 4, XP: 8, MaxHP: 10, Atk: 3, Def: 1, Dmg: 4, Moves: 1, Range: 1, Poisons: 40},
 	'z': {Name: "zombie", Depth: 5, XP: 9, MaxHP: 20, Atk: 1, Dmg: 6, Moves: 1, Range: 1},       // slow to kill
