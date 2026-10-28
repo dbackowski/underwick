@@ -61,6 +61,8 @@ func TestBalance(t *testing.T) {
 			if w.Over && w.Depth <= 3 {
 				if w.Cause == "poison" && lastDrunk == "potion of poison" {
 					early["a potion of poison"]++
+				} else if w.Player.Confused > 0 && lastDrunk == "potion of confusion" {
+					early["confused by a potion"]++
 				} else {
 					early[w.Cause]++
 				}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"io/fs"
 	"log"
@@ -132,6 +133,11 @@ func loadSprites() map[string]*ebiten.Image {
 			return fmt.Errorf("%s: %w", path, err)
 		}
 		sprites[strings.TrimSuffix(strings.TrimPrefix(path, "assets/"), ".png")] = ebiten.NewImageFromImage(img)
+		if strings.HasSuffix(path, "/object_potion_red.png") {
+			for name, c := range potionTints {
+				sprites["World/object_potion_"+name] = ebiten.NewImageFromImage(refill(img, c[0], c[1]))
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -1185,6 +1191,33 @@ func writeIconset(dir string) {
 			f.Close()
 		}
 	}
+}
+
+// potionTints are the potion colours the pack lacks, as a dark and a light shade of the liquid: it has
+// only red, blue and green, and every potion kind needs a colour of its own.
+var potionTints = map[string][2]color.RGBA{
+	"yellow": {{170, 140, 20, 255}, {250, 220, 60, 255}},
+	"purple": {{90, 30, 130, 255}, {170, 90, 230, 255}},
+	"orange": {{170, 80, 10, 255}, {250, 140, 40, 255}},
+	"pink":   {{170, 60, 110, 255}, {250, 130, 190, 255}},
+	"cyan":   {{0, 120, 120, 255}, {70, 230, 210, 255}},
+}
+
+// refill is the red potion's sprite with its liquid in other shades.
+func refill(red image.Image, dark, light color.RGBA) image.Image {
+	img := image.NewRGBA(red.Bounds())
+	draw.Draw(img, img.Bounds(), red, red.Bounds().Min, draw.Src)
+	for y := range img.Bounds().Dy() {
+		for x := range img.Bounds().Dx() {
+			switch img.RGBAAt(x, y) {
+			case color.RGBA{143, 23, 23, 255}:
+				img.SetRGBA(x, y, dark)
+			case color.RGBA{221, 35, 35, 255}:
+				img.SetRGBA(x, y, light)
+			}
+		}
+	}
+	return img
 }
 
 func (g *Game) sprite(name string) *ebiten.Image {

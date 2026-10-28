@@ -181,6 +181,7 @@ type World struct {
 	Class         *Class
 	Spells        []*Spell
 	Mana, MaxMana int
+	Haste         int // turns left of the hero moving twice to the monsters' once
 
 	rng    *rand.Rand
 	base   Kind                 // the hero's stats before gear; levels raise these
@@ -544,7 +545,14 @@ func (w *World) turn(act func()) {
 	if w.Level[p.Y][p.X] == '~' && (p.X != fromX || p.Y != fromY) {
 		w.monstersAct() // wading is slow: the monsters get an extra turn
 	}
-	w.monstersAct()
+	if w.Haste > 0 {
+		if w.Haste--; w.Haste == 0 {
+			w.say("You slow down.")
+		}
+	}
+	if w.Haste%2 == 0 { // a quick hero has every other turn to itself
+		w.monstersAct()
+	}
 
 	if w.idle++; wanderEvery > 0 && w.idle >= wanderEvery && len(w.Monsters) < maxMonsters {
 		w.idle = 0

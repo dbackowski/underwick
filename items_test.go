@@ -157,7 +157,8 @@ func TestSpritesExist(t *testing.T) {
 		if _, ok := lookOf(n); !ok {
 			t.Errorf("no letter for sprite %s", n)
 		}
-		if _, err := assets.Open("assets/" + n + ".png"); oryx && err != nil {
+		_, tinted := potionTints[strings.TrimPrefix(n, "World/object_potion_")] // made from the red one, see refill
+		if _, err := assets.Open("assets/" + n + ".png"); oryx && err != nil && !tinted {
 			t.Errorf("missing sprite %s", n)
 		}
 	}
@@ -196,7 +197,8 @@ func TestShop(t *testing.T) {
 		t.Fatal("the merchant should heal and cure for 2 gold an HP")
 	}
 	heal := kindNamed("potion of healing")
-	w.Inventory = append(w.Inventory, &Item{ItemKind: heal}, &Item{ItemKind: heal})
+	// Without the ware bought above, which may be an unknown potion of another kind.
+	w.Inventory = append(w.Inventory[:len(classes[0].Start)], &Item{ItemKind: heal}, &Item{ItemKind: heal})
 	gold := w.Gold
 	w.Buy(buyIdentify)
 	if !w.known[heal] || w.Gold != gold-25 {
@@ -268,5 +270,22 @@ func TestBonuses(t *testing.T) {
 		if got := c.it.Bonuses(); got != c.want {
 			t.Errorf("%s +%d: got %q, want %q", c.it.Name, c.it.Plus, got, c.want)
 		}
+	}
+}
+
+func TestSpeed(t *testing.T) {
+	w := NewWorld([]string{
+		"############",
+		"#@........z#",
+		"############",
+	})
+	z := w.Monsters[0]
+	z.Sleep, z.hunting, z.goalX, z.goalY = 0, true, 1, 1
+	w.Haste = 4
+	for range 4 {
+		w.Step(0, 0)
+	}
+	if z.X != 8 || w.Haste != 0 || !slices.Contains(w.Log, "You slow down.") {
+		t.Fatalf("a quick hero should have the zombie take 2 steps in 4 turns, then slow down; got x %d, haste %d, log %q", z.X, w.Haste, w.Log)
 	}
 }

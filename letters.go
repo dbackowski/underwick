@@ -135,6 +135,9 @@ func lookOf(name string) (look, bool) {
 			return look{ch: '-', fg: c}, c.A > 0
 		case strings.HasPrefix(base, "object_potion"):
 			c := map[string]color.RGBA{"red": rgb(240, 70, 70), "blue": rgb(90, 140, 255), "green": rgb(90, 220, 90)}[last]
+			if t, ok := potionTints[last]; ok {
+				c = t[1]
+			}
 			return look{ch: '!', fg: c}, c.A > 0
 		case base == "object_scroll":
 			return look{ch: '?', fg: rgb(240, 230, 200)}, true

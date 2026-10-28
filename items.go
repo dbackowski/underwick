@@ -58,15 +58,40 @@ var itemKinds = []*ItemKind{
 		w.heal(w.Player, 20)
 		w.say("You feel much better.")
 	}},
-	{Name: "potion of vigour", Class: 'p', Depth: 1, Weight: 2, use: func(w *World) {
+	{Name: "potion of vigour", Class: 'p', Depth: 1, Weight: 1, use: func(w *World) {
 		w.base.MaxHP += 5
 		w.recalc()
 		w.heal(w.Player, 5)
 		w.say("You feel more robust.")
 	}},
-	{Name: "potion of poison", Class: 'p', Depth: 1, Weight: 3, use: func(w *World) {
+	{Name: "potion of poison", Class: 'p', Depth: 1, Weight: 2, use: func(w *World) {
 		w.Player.Poison += 5 + w.Depth/2
 		w.say("You feel very sick.")
+	}},
+	// The second bad potion, so a sip of an unknown one is a worse gamble in a fight than out of one.
+	{Name: "potion of confusion", Class: 'p', Depth: 1, Weight: 1, use: func(w *World) {
+		w.Player.Confused += 10
+		w.say("The room spins.")
+	}},
+	{Name: "potion of speed", Class: 'p', Depth: 2, Weight: 1, use: func(w *World) {
+		w.Haste += 20
+		w.say("You feel quick.")
+	}},
+	{Name: "potion of mana", Class: 'p', Depth: 2, Weight: 1, use: func(w *World) {
+		if w.MaxMana == 0 {
+			w.say("You tingle, but nothing comes of it.")
+			return
+		}
+		w.Mana = w.MaxMana
+		w.say("Your mind clears.")
+	}},
+	{Name: "potion of strength", Class: 'p', Depth: 3, Weight: 1, use: func(w *World) {
+		w.base.Dmg++
+		w.recalc()
+		w.say("You feel stronger.")
+	}},
+	{Name: "potion of experience", Class: 'p', Depth: 4, Weight: 1, use: func(w *World) {
+		w.gainXP(xpFor(w.ExpLevel) - w.XP)
 	}},
 
 	{Name: "scroll of mapping", Sprite: "object_scroll", Class: 's', Depth: 1, Weight: 2, use: func(w *World) {
@@ -136,7 +161,7 @@ func init() {
 
 // The faces unidentified potions and scrolls wear; each run shuffles which kind gets which.
 var (
-	potionColours = []string{"red", "blue", "green"}
+	potionColours = []string{"red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"}
 	scrollLabels  = []string{"ZELGO MER", "FOOBIE BLETCH", "XIXAXA", "VERR YED HORRE", "ELAM EBOW", "DAIYEN FOOELS", "KERNOD WEL", "GARVEN DEH"}
 )
 
