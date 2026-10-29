@@ -35,6 +35,8 @@ type Kind struct {
 	Boss    bool   // guards a floor's stairs, which open when it dies
 
 	Poisons, Confuses int // percent chance a hit also poisons or confuses
+	Steals            int // percent chance a hit also takes a quarter of the hero's gold, and the thief with it
+	Heals             int // HP it gives a wounded monster it can see, in place of anything else it would do
 }
 
 // hero is the warrior's base, before levels and gear: the class tests use.
@@ -63,6 +65,9 @@ var kinds = map[byte]Kind{
 	'f': {Name: "flame", Depth: 11, XP: 22, MaxHP: 20, Atk: 5, Def: 2, Dmg: 9, Moves: 1, Range: 3, Missile: "proj_orange_ball"}, // spits fire
 	'l': {Name: "flayer", Depth: 12, XP: 26, MaxHP: 30, Atk: 5, Def: 3, Dmg: 10, Moves: 1, Range: 1},
 	'x': {Name: "demon", Depth: 13, XP: 30, MaxHP: 34, Atk: 6, Def: 3, Dmg: 12, Moves: 1, Range: 1}, // lesser demon
+	// Deep enough that the hero carries gold worth stealing, with merchants on floors 14 and 19 to spend it.
+	't': {Name: "pirate", Depth: 14, XP: 30, MaxHP: 24, Atk: 7, Def: 3, Dmg: 9, Moves: 2, Range: 1, Steals: 50},
+	'd': {Name: "druid", Depth: 15, XP: 34, MaxHP: 30, Atk: 6, Def: 3, Dmg: 10, Moves: 1, Range: 1, Heals: 10}, // kill it first
 
 	// Bosses, one every bossEvery floors. They grow stronger each time round, see descend.
 	'D': {Name: "dragon", MaxHP: 18, Atk: 3, Def: 2, Dmg: 6, Moves: 1, Range: 4, Missile: "proj_red_ball", Boss: true},    // breathes fire
@@ -582,7 +587,7 @@ func (w *World) monstersAct() {
 	// A copy, since monsters can die mid-turn.
 	for _, m := range slices.Clone(w.Monsters) {
 		for range m.Moves {
-			if m.HP > 0 && !w.Over {
+			if slices.Contains(w.Monsters, m) && !w.Over { // not killed or gone this turn
 				w.act(m)
 			}
 		}
@@ -677,6 +682,17 @@ func (w *World) act(m *Entity) {
 		m.Sleep = 0
 		if w.Visible[m.Y][m.X] {
 			w.say("The %s wakes up.", m.Name)
+		}
+	}
+	if m.Heals > 0 {
+		for _, o := range w.Monsters {
+			if o != m && o.HP < o.MaxHP && abs(o.X-m.X)+abs(o.Y-m.Y) <= sight && w.canSee(m.X, m.Y, o.X, o.Y) {
+				w.heal(o, m.Heals)
+				if w.Visible[o.Y][o.X] {
+					w.say("The %s heals the %s.", m.Name, o.Name)
+				}
+				return
+			}
 		}
 	}
 	if (dx == 0 || dy == 0) && w.firstInLine(m, sign(dx), sign(dy), m.Range) == p {
@@ -817,6 +833,12 @@ func (w *World) attack(a, t *Entity) {
 	if w.rng.IntN(100) < a.Confuses {
 		t.Confused = 4
 		w.say("You feel confused!")
+	}
+	if a.Steals > 0 && w.Gold > 0 && w.rng.IntN(100) < a.Steals { // only thieves roll, or every later roll would shift
+		n := (w.Gold + 3) / 4
+		w.Gold -= n
+		w.Monsters = slices.DeleteFunc(w.Monsters, func(m *Entity) bool { return m == a })
+		w.say("The %s grabs %d gold and vanishes!", a.Name, n)
 	}
 }
 

@@ -48,6 +48,7 @@ var creatureColours = map[string]color.RGBA{
 	"gnoll": rgb(200, 160, 100), "skelarcher": rgb(210, 200, 150), "imp": rgb(240, 90, 60),
 	"ghost": rgb(190, 220, 255), "skelwar": rgb(240, 240, 255), "skelmage": rgb(130, 170, 255),
 	"flame": rgb(255, 150, 40), "flayer": rgb(220, 90, 200), "demon": rgb(230, 50, 50),
+	"pirate": rgb(230, 190, 90), "druid": rgb(110, 200, 120),
 	"dragon": rgb(240, 70, 50), "beholder": rgb(240, 130, 170), "lord": rgb(170, 100, 240),
 	"cyclops": rgb(210, 170, 120), "reaper": rgb(200, 200, 200),
 }

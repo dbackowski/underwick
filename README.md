@@ -80,7 +80,8 @@ Every 150 turns or so another monster wanders onto the floor out of sight and co
 waiting has a price. A third of the floor's own monsters start asleep (two thirds for the thief), waking only by chance once they could see you, or when hit; a sleeper is
 always hit. Snakes and spiders can poison you (1 HP a turn), and imps and ghosts can confuse you (half
 your moves go astray).
-Twenty kinds live at different depths, from rats and bats on floor 1 to flayers and demons below floor 12;
+Twenty-two kinds live at different depths, from rats and bats on floor 1 to flayers and demons below floor 12,
+then pirates, who may grab a quarter of your gold and vanish, and druids, who heal the others rather than fight;
 each floor holds those that first appear there or up to 6 floors above. Some are fast, some shoot along
 straight lines, and every 4 floors below their first appearance they grow a little stronger.
 

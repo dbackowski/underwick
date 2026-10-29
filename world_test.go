@@ -427,3 +427,38 @@ func TestPace(t *testing.T) {
 		t.Fatal("opening a panel should forget a waiting press")
 	}
 }
+
+func TestPirateAndDruid(t *testing.T) {
+	// A pirate beside the hero hits until it steals, then is gone with a quarter of the gold.
+	w := NewWorld([]string{
+		"#####",
+		"#@t.#",
+		"#####",
+	})
+	pirate := w.Monsters[0]
+	pirate.Sleep, pirate.Atk = 0, 100
+	w.Gold, w.Found = 100, 100
+	for i := 0; len(w.Monsters) > 0; i++ {
+		if i > 100 {
+			t.Fatal("the pirate never steals")
+		}
+		w.Player.HP = w.Player.MaxHP // keep it alive for the test
+		w.Step(0, 0)
+	}
+	if w.Gold != 75 || w.Kills != 0 || !slices.Contains(w.Log, "The pirate grabs 25 gold and vanishes!") {
+		t.Fatalf("the pirate should take 25 of 100 gold and vanish, got %d gold, %d kills, log %q", w.Gold, w.Kills, w.Log)
+	}
+
+	// A druid heals a wounded monster it can see rather than fight.
+	w = NewWorld([]string{
+		"#######",
+		"#@.d.o#",
+		"#######",
+	})
+	druid, orc := w.Monsters[0], w.Monsters[1]
+	druid.Sleep, orc.HP = 0, 1
+	w.Step(0, 0)
+	if orc.HP != 1+druid.Heals || !slices.Contains(w.Log, "The druid heals the orc.") {
+		t.Fatalf("the druid should heal the orc by %d, got HP %d, log %q", druid.Heals, orc.HP, w.Log)
+	}
+}
