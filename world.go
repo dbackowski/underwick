@@ -133,6 +133,7 @@ type Entity struct {
 	Poison   int // turns left of losing 1 HP a turn
 	Confused int // turns left of stumbling about
 	Sleep    int // turns left asleep; asleep until woken, if negative
+	Held     int // moves left caught in a net, able to strike but not to walk
 
 	// Monsters only: where the player was last seen, while hunting it.
 	hunting      bool
@@ -460,7 +461,7 @@ func (w *World) Describe(x, y int) string {
 			for _, st := range []struct {
 				on   bool
 				name string
-			}{{m.Moves > 1, "fast"}, {m.Sleep != 0, "asleep"}, {m.Confused > 0, "confused"}, {m.Poison > 0, "poisoned"}} {
+			}{{m.Moves > 1, "fast"}, {m.Sleep != 0, "asleep"}, {m.Confused > 0, "confused"}, {m.Poison > 0, "poisoned"}, {m.Held > 0, "netted"}} {
 				if st.on {
 					s += ", " + st.name
 				}
@@ -684,6 +685,10 @@ func (w *World) act(m *Entity) {
 			w.say("The %s wakes up.", m.Name)
 		}
 	}
+	held := m.Held > 0
+	if held {
+		m.Held--
+	}
 	if m.Heals > 0 {
 		for _, o := range w.Monsters {
 			if o != m && o.HP < o.MaxHP && abs(o.X-m.X)+abs(o.Y-m.Y) <= sight && w.canSee(m.X, m.Y, o.X, o.Y) {
@@ -709,6 +714,9 @@ func (w *World) act(m *Entity) {
 	}
 	if m.X == m.goalX && m.Y == m.goalY {
 		m.hunting = false // reached the last sighting and the player is gone
+		return
+	}
+	if held {
 		return
 	}
 	if sx, sy, ok := w.stepToward(m.X, m.Y, m.goalX, m.goalY); ok {

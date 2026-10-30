@@ -54,6 +54,61 @@ var spells = []*Spell{
 		w.say("You feel better.")
 	}},
 	{Name: "sleep", Cost: 5, cast: func(w *World, dx, dy int) { w.lull(8) }},
+	// Fire Bolt's dearer cousin: it hits everything in the line, for a crowd in a corridor.
+	{Name: "lightning", Cost: 6, Aimed: true, cast: func(w *World, dx, dy int) {
+		p := w.Player
+		var hit []*Entity
+		for i := 1; i <= 6; i++ {
+			x, y := p.X+dx*i, p.Y+dy*i
+			if solid(w.Level[y][x]) {
+				break
+			}
+			if m := w.monsterAt(x, y); m != nil {
+				hit = append(hit, m)
+			}
+		}
+		if len(hit) == 0 {
+			w.say("The lightning crackles off into nothing.")
+			return
+		}
+		for _, m := range hit {
+			w.Shots = append(w.Shots, Shot{p.X, p.Y, m, "lightning_1"})
+			w.say("Lightning strikes the %s.", m.Name)
+			w.damage(m, 2+w.rng.IntN(4)+w.ExpLevel/2)
+		}
+	}},
+	// A way out: up to 4 tiles along a line, over creatures but not through walls or closed doors, onto
+	// the farthest tile it can stand on.
+	{Name: "blink", Cost: 4, Aimed: true, cast: func(w *World, dx, dy int) {
+		p := w.Player
+		x, y := p.X, p.Y
+		for i := 1; i <= 4; i++ {
+			nx, ny := p.X+dx*i, p.Y+dy*i
+			if solid(w.Level[ny][nx]) {
+				break
+			}
+			if w.free(nx, ny) && !hazard(w.Level[ny][nx]) {
+				x, y = nx, ny
+			}
+		}
+		if x == p.X && y == p.Y {
+			w.say("Something blocks the way.")
+			return
+		}
+		p.X, p.Y = x, y
+		w.say("You blink.")
+	}},
+	{Name: "net", Cost: 3, Aimed: true, cast: func(w *World, dx, dy int) {
+		p := w.Player
+		t := w.firstInLine(p, dx, dy, 6)
+		if t == nil {
+			w.say("The net falls empty.")
+			return
+		}
+		w.Shots = append(w.Shots, Shot{p.X, p.Y, t, "net"})
+		t.Held = 8
+		w.say("The net tangles the %s.", t.Name)
+	}},
 }
 
 func spellNamed(name string) *Spell {

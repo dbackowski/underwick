@@ -156,6 +156,10 @@ func init() {
 		&ItemKind{Name: "tome of fire bolt", Sprite: "object_tome_brown", Class: 't', Depth: 2, Weight: 1, use: learn("fire bolt")},
 		&ItemKind{Name: "tome of heal", Sprite: "object_tome_blue", Class: 't', Depth: 2, Weight: 1, use: learn("heal")},
 		&ItemKind{Name: "tome of sleep", Sprite: "object_tome_green", Class: 't', Depth: 2, Weight: 1, use: learn("sleep")},
+		// The pack has three tome covers, so these share them; a tome's name is never hidden anyway.
+		&ItemKind{Name: "tome of lightning", Sprite: "object_tome_brown", Class: 't', Depth: 4, Weight: 1, use: learn("lightning")},
+		&ItemKind{Name: "tome of blink", Sprite: "object_tome_blue", Class: 't', Depth: 3, Weight: 1, use: learn("blink")},
+		&ItemKind{Name: "tome of net", Sprite: "object_tome_green", Class: 't', Depth: 2, Weight: 1, use: learn("net")},
 	)
 }
 

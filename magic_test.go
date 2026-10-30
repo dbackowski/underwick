@@ -3,6 +3,7 @@ package main
 import (
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -183,5 +184,39 @@ func TestTomesAndMana(t *testing.T) {
 	w.gainXP(xpFor(1))
 	if w.MaxMana != max+2 {
 		t.Fatal("levelling should raise a caster's mana")
+	}
+}
+
+func TestLightningBlinkNet(t *testing.T) {
+	w := runAs(classNamed("mage"), "#########", "#@.o.o.##", "#########")
+	w.Spells, w.Mana = []*Spell{spellNamed("lightning"), spellNamed("blink"), spellNamed("net")}, 50
+	a, b := w.Monsters[0], w.Monsters[1]
+	a.MaxHP, a.HP, b.MaxHP, b.HP = 100, 100, 100, 100
+	w.Cast(0, 1, 0)
+	if a.HP == 100 || b.HP == 100 || len(w.Shots) != 2 {
+		t.Fatalf("lightning should strike both orcs in the line, got HP %d and %d", a.HP, b.HP)
+	}
+
+	// Blink jumps over the sleeping orcs to the farthest free tile, 4 away at most.
+	w = runAs(classNamed("mage"), "#########", "#@o.o...#", "#########")
+	w.Spells, w.Mana = []*Spell{spellNamed("blink")}, 50
+	for _, m := range w.Monsters {
+		m.Sleep = 100
+	}
+	w.Cast(0, 1, 0)
+	if w.Player.X != 5 {
+		t.Fatalf("blink should land 4 tiles on, past the orcs, got x %d", w.Player.X)
+	}
+
+	w = runAs(classNamed("mage"), "#######", "#@...o#", "#######")
+	w.Spells, w.Mana = []*Spell{spellNamed("net")}, 50
+	orc := w.Monsters[0]
+	orc.Sleep, orc.hunting, orc.goalX, orc.goalY = 0, true, 1, 1
+	w.Cast(0, 1, 0)
+	for range 3 {
+		w.Step(0, 0)
+	}
+	if orc.X != 5 || orc.Held == 0 || !strings.Contains(w.Describe(5, 1), "netted") {
+		t.Fatalf("a netted orc should stay put, got x %d, held %d", orc.X, orc.Held)
 	}
 }

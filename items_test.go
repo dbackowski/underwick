@@ -138,7 +138,7 @@ func TestSpritesExist(t *testing.T) {
 		names = append(names, "World/"+w.ItemSprite(&Item{ItemKind: k}))
 	}
 	names = append(names, "World/"+gold.Sprite, "World/"+goldKey.Sprite, "World/"+blueKey.Sprite,
-		"Character/"+hero.Name+"_idle_d_1", "FX/arrow_x", "FX/arrow_y", "Character/dwarf_idle_d_1", "Character/dwarf_idle_d_2")
+		"Character/"+hero.Name+"_idle_d_1", "FX/arrow_x", "FX/arrow_y", "FX/lightning_1", "FX/net", "Character/dwarf_idle_d_1", "Character/dwarf_idle_d_2")
 	for _, c := range classes {
 		names = append(names, "Character/"+c.Name+"_idle_d_1")
 	}

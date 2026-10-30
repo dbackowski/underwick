@@ -85,6 +85,10 @@ func lookOf(name string) (look, bool) {
 				"blue": rgb(100, 160, 255), "green": rgb(120, 230, 90)}[parts[1]]; ok {
 				return look{ch: '*', fg: c}, true
 			}
+		case parts[0] == "lightning":
+			return look{ch: '~', fg: rgb(255, 240, 120)}, true
+		case base == "net":
+			return look{ch: '#', fg: rgb(200, 180, 140)}, true
 		case parts[0] == "status": // status_kind_frame
 			switch parts[1] {
 			case "sleep":

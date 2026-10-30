@@ -263,24 +263,46 @@ func (w *World) botShop() bool {
 
 // botItems has the tactician use its gear the way a careful player would. It reports whether it took
 // the turn: drinking a potion when hurt (known healing first), picking up what it stands on, wearing
-// anything better than what it has on, and reading unknown scrolls when nothing is hunting it.
+// anything better than what it has on, and reading unknown scrolls and tomes when nothing is hunting it.
 func (w *World) botItems() bool {
 	p := w.Player
 	hunter := w.nearest(func(m *Entity) bool { return m.hunting })
-	// Magic first: heal when hurt, and bolt anything in line.
+	// Magic first: heal when hurt and bolt anything in line; when hurt in a fight, put the monsters to
+	// sleep or blink away from the one alongside; with a bow, net a monster coming to fight hand to hand.
+	hurt := p.HP*2 < p.MaxHP
 	for i, s := range w.Spells {
 		if w.Mana < w.cost(s) {
 			continue
 		}
-		// Heal takes all the mana, so spend it when none of it would spill: in a fight once under
-		// half HP, or as soon as nothing is hunting.
-		if s.Name == "heal" && p.MaxHP-p.HP >= w.healing() && (p.HP*2 < p.MaxHP || hunter == nil) {
-			w.Cast(i, 0, 0)
-			return true
-		}
-		if s.Name == "fire bolt" {
+		switch s.Name {
+		case "heal":
+			// Heal takes all the mana, so spend it when none of it would spill: in a fight once under
+			// half HP, or as soon as nothing is hunting.
+			if p.MaxHP-p.HP >= w.healing() && (hurt || hunter == nil) {
+				w.Cast(i, 0, 0)
+				return true
+			}
+		case "fire bolt", "lightning":
 			for _, d := range dirs {
 				if t := w.firstInLine(p, d[0], d[1], 6); t != nil && t != p {
+					w.Cast(i, d[0], d[1])
+					return true
+				}
+			}
+		case "sleep":
+			if hurt && hunter != nil && abs(hunter.X-p.X)+abs(hunter.Y-p.Y) <= 2 {
+				w.Cast(i, 0, 0)
+				return true
+			}
+		case "blink":
+			if hurt && hunter != nil && abs(hunter.X-p.X)+abs(hunter.Y-p.Y) == 1 {
+				w.Cast(i, sign(p.X-hunter.X), sign(p.Y-hunter.Y))
+				return true
+			}
+		case "net":
+			for _, d := range dirs {
+				t := w.firstInLine(p, d[0], d[1], 6)
+				if p.Range > 1 && t != nil && t != p && t.hunting && t.Range == 1 && t.Held == 0 && abs(t.X-p.X)+abs(t.Y-p.Y) >= 2 {
 					w.Cast(i, d[0], d[1])
 					return true
 				}
@@ -319,7 +341,7 @@ func (w *World) botItems() bool {
 			w.Use(i)
 			return true
 		}
-		if it.Class == 's' && !w.known[it.ItemKind] {
+		if it.Class == 's' && !w.known[it.ItemKind] || it.Class == 't' {
 			w.Use(i)
 			return true
 		}
