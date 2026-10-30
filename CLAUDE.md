@@ -37,8 +37,10 @@ A turn-based roguelike in Go with Ebitengine, all in package `main`. `README.md`
   `dataDir` at a temporary folder first. The README's screenshots in `docs/screenshots/` were made this way, with
   the bots from `sim_test.go` copied into a temporary file to play seeded runs.
 - Panels fit about 42 characters a line; check new on-screen text in a screenshot.
-- Before and after any balance change, run `UNDERWICK_SIM=1 go test -run Balance -v` (300 seeded runs per bot,
-  about a minute) and compare.
+- Before and after any balance change, run `UNDERWICK_SIM=1000 go test -run Balance -v` (1000 seeded runs per
+  bot, the bots at once, under a minute) and compare. Each average score carries its 95% margin: a change
+  within the margins may be chance. Any change to items or the rules shifts every run's dice, so even a
+  change that cannot matter moves the numbers a little; `UNDERWICK_SIM=1` gives a quicker 300.
 - Browser build: `GOOS=js GOARCH=wasm go build -o web/underwick.wasm .`. The output embeds the sprites, so it is
   gitignored. `web/deploy.sh` publishes it to GitHub Pages; it pushes, so run it only when asked.
 - macOS app: `mac/app.sh` builds `Underwick.app` (gitignored), with an icon made from the hero sprite.

@@ -153,7 +153,8 @@ then open http://localhost:8000.
 serves. It runs locally because the build needs the sprites, which never go to GitHub.
 
 `UNDERWICK_SIM=1 go test -run Balance -v` plays 300 seeded runs with bots, a stairs-rushing warrior and a
-careful player as every class, and prints how deep they got, for tuning. The bots see the whole floor.
+careful player as every class, and prints how deep they got, for tuning; `UNDERWICK_SIM=1000` plays 1000.
+The bots see the whole floor.
 
 ## Credits
 
