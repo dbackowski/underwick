@@ -220,3 +220,19 @@ func TestLightningBlinkNet(t *testing.T) {
 		t.Fatalf("a netted orc should stay put, got x %d, held %d", orc.X, orc.Held)
 	}
 }
+
+func TestSneakAttack(t *testing.T) {
+	// With 1 damage every hit rolls 1, so only the sneak attack can make it more: half again, rounded up.
+	lost := func(c *Class, sleep int) int {
+		w := runAs(c, "####", "#@o#", "####")
+		orc := w.Monsters[0]
+		orc.Sleep, orc.MaxHP, orc.HP, orc.Def = sleep, 100, 100, -100
+		w.Player.Dmg = 1
+		w.Step(1, 0)
+		return 100 - orc.HP
+	}
+	thief, warrior := classNamed("thief"), classNamed("warrior")
+	if lost(thief, 100) != 2 || lost(warrior, 100) != 1 || lost(thief, 0) != 1 {
+		t.Fatalf("only the thief should deal a sleeper more, got %d, warrior %d, awake %d", lost(thief, 100), lost(warrior, 100), lost(thief, 0))
+	}
+}

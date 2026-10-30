@@ -824,13 +824,20 @@ func (w *World) attack(a, t *Entity) {
 		}
 		return
 	}
-	if a == w.Player {
+	n := 1 + w.rng.IntN(a.Dmg)
+	switch {
+	case a == w.Player && w.Class != nil && w.Class.Stealth && t.Sleep != 0:
+		// The thief's sneak attack, half again the damage: with its dagger it fell behind the others
+		// early on, where most monsters it meets are asleep. Double put it ahead of them all.
+		n += (n + 1) / 2
+		w.say("You stab the sleeping %s.", t.Name)
+	case a == w.Player:
 		w.say("You hit the %s.", t.Name)
-	} else {
+	default:
 		w.say("The %s hits.", a.Name)
 		w.hurtBy = article(a.Name)
 	}
-	w.damage(t, 1+w.rng.IntN(a.Dmg))
+	w.damage(t, n)
 	if t.HP <= 0 || t != w.Player {
 		return
 	}

@@ -30,7 +30,7 @@ it that way even with the art in). For the art, copy the pack in before building
 The title screen starts a new game, continues a saved one, or shows the high scores and the keys. Pick a
 hero to start: the warrior (tough, with a sword), the archer (shoots with a bow), the mage (frail,
 casts Fire Bolt), the thief (quiet, so twice as many monsters are asleep when it comes, and they wake
-half as often) or the cleric (armoured, casts Heal).
+half as often, and it stabs sleepers for half again the damage) or the cleric (armoured, casts Heal).
 
 ## Keys
 
