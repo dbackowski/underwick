@@ -148,18 +148,34 @@ func TestGenerate(t *testing.T) {
 				}
 			}
 
-			// Flood fill from the start must reach every open tile.
+			// Flood fill from the start must reach every open tile, going round barrels, crates and
+			// bookcases: they stand where they cut nothing off.
 			start := strings.IndexByte(all, '@')
 			seen := map[int]bool{start: true}
 			for queue := []int{start}; len(queue) > 0; queue = queue[1:] {
 				for _, n := range []int{queue[0] - 1, queue[0] + 1, queue[0] - mapW, queue[0] + mapW} {
-					if all[n] != '#' && !seen[n] {
+					if all[n] != '#' && !strings.ContainsRune("678", rune(all[n])) && !seen[n] {
 						seen[n] = true
 						queue = append(queue, n)
 					}
 				}
 			}
-			if open := len(all) - strings.Count(all, "#"); len(seen) != open {
+			scenery := strings.Count(all, "6") + strings.Count(all, "7") + strings.Count(all, "8")
+			// Nor may they cut a dry way, the only kind monsters and the bots take.
+			sx, sy := start%mapW, start/mapW
+			dry := walkable(func(x, y int) byte { return level[y][x] }, sx, sy)
+			blocked := walkable(func(x, y int) byte {
+				if c := level[y][x]; c != '6' && c != '7' && c != '8' {
+					return c
+				}
+				return '#'
+			}, sx, sy)
+			for p := range dry {
+				if c := level[p[1]][p[0]]; c != '6' && c != '7' && c != '8' && !blocked[p] {
+					t.Fatalf("seed %d depth %d: scenery cuts off %v from the start by dry ways\n%s", seed, depth, p, strings.Join(level, "\n"))
+				}
+			}
+			if open := len(all) - strings.Count(all, "#") - scenery; len(seen) != open {
 				t.Fatalf("seed %d depth %d: reached %d of %d open tiles\n%s", seed, depth, len(seen), open, strings.Join(level, "\n"))
 			}
 		}
@@ -460,5 +476,43 @@ func TestPirateAndDruid(t *testing.T) {
 	w.Step(0, 0)
 	if orc.HP != 1+druid.Heals || !slices.Contains(w.Log, "The druid heals the orc.") {
 		t.Fatalf("the druid should heal the orc by %d, got HP %d, log %q", druid.Heals, orc.HP, w.Log)
+	}
+}
+
+func TestScenery(t *testing.T) {
+	w := NewWorld([]string{
+		"#####",
+		"#6@8#",
+		"#####",
+	})
+	w.Step(-1, 0)
+	if w.Level[1][1] != '.' || !strings.HasPrefix(w.Log[0], "You smash the barrel.") {
+		t.Fatalf("walking into a barrel should smash it, got %q, log %q", w.Level[1], w.Log)
+	}
+	w.Step(1, 0)
+	if w.Level[1][3] != '9' {
+		t.Fatalf("walking into a bookcase should search it, got %q", w.Level[1])
+	}
+	floor := len(w.Floor)
+	w.Step(1, 0)
+	if len(w.Floor) != floor || w.Player.X != 2 {
+		t.Fatal("a searched bookcase should hold nothing more, and still block the way")
+	}
+
+	// Floors hold some, and a bookcase that holds anything holds a scroll.
+	found := 0
+	for seed := range uint64(20) {
+		found += strings.Count(strings.Join(generate(rand.New(rand.NewPCG(seed, 0)), 3, 0), ""), "8")
+	}
+	if found == 0 {
+		t.Fatal("20 floors should hold a bookcase between them")
+	}
+	for seed := range uint64(50) {
+		w := NewWorld([]string{"####", "#@8#", "####"})
+		w.rng = rand.New(rand.NewPCG(seed, 0))
+		w.Step(1, 0)
+		if its := w.ItemsAt(1, 1); len(its) > 0 && its[0].Class != 's' {
+			t.Fatalf("a bookcase should only hold scrolls, got a %s", its[0].Name)
+		}
 	}
 }

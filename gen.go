@@ -38,14 +38,15 @@ func (r room) ring() [][4]int {
 //	*  an item        (  gold key          )  blue key         &  chest
 //	+  door           1  iron door, locked (gold key)          2  magic door, locked (blue key)
 //	~  deep water     =  lava              %  acid             ^  pit
-//	$  the merchant
+//	$  the merchant   6  barrel            7  crate            8  bookcase (9 once searched)
 //
 // and a kind letter for each monster. Rooms are joined by corridors, often through doors. The hero
 // starts in the first room and the stairs are in the room farthest from it; with a boss (its kind
 // character, or 0 for none) the boss takes the stairs' place, and they open when it dies. A dead-end
 // room may be a locked vault with a chest, its key elsewhere on the floor. Other rooms may hold a
 // pool of water, acid, lava or pits, always leaving the room's edge walkable. On a shop floor (see
-// shopFloor) a merchant stands in the middle of a room with no pool.
+// shopFloor) a merchant stands in the middle of a room with no pool. Barrels, crates and bookcases
+// stand in some rooms' corners.
 func generate(rng *rand.Rand, depth int, boss byte) []string {
 	for {
 		g := make([][]byte, mapH)
@@ -135,6 +136,7 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 
 		// Hazard pools fill parts of rooms' insides, never their edges, so every entrance still
 		// connects to every other along the edge.
+		pooled := map[int]bool{}
 		for i, r := range rooms {
 			if i == 0 || i == far || i == vault || rng.IntN(3) > 0 || i == shop {
 				continue
@@ -150,10 +152,34 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 				pool += "="
 			}
 			h := pool[rng.IntN(len(pool))]
+			pooled[i] = true
 			for y := r.y + 1; y < r.y+r.h-1; y++ {
 				for x := r.x + 1; x < r.x+r.w-1; x++ {
 					if rng.IntN(5) < 3 {
 						g[y][x] = h
+					}
+				}
+			}
+		}
+
+		// Barrels, crates and bookcases stand in corners with wall on both outer sides, so they never
+		// block a corridor coming in. Never in a room with a pool: its edge is the only dry way round,
+		// and two corners taken would cut it.
+		for i, r := range rooms {
+			if i == vault || i == shop || pooled[i] {
+				continue
+			}
+			for _, x := range []int{r.x, r.x + r.w - 1} {
+				for _, y := range []int{r.y, r.y + r.h - 1} {
+					ox, oy := x-1, y-1 // the tiles just outside the corner
+					if x > r.x {
+						ox = x + 1
+					}
+					if y > r.y {
+						oy = y + 1
+					}
+					if g[y][x] == '.' && g[y][ox] == '#' && g[oy][x] == '#' && rng.IntN(8) == 0 {
+						g[y][x] = "678"[rng.IntN(3)]
 					}
 				}
 			}

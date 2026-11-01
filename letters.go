@@ -105,6 +105,12 @@ func lookOf(name string) (look, bool) {
 		theme := themeColours[last]
 		water := map[string]color.RGBA{"water": rgb(50, 110, 220), "lava": rgb(220, 70, 30), "acid": rgb(110, 190, 40)}
 		switch {
+		case base == "scenery_barrel":
+			return look{ch: '0', fg: rgb(170, 110, 60)}, true
+		case base == "scenery_crate":
+			return look{ch: '%', fg: rgb(190, 140, 80)}, true
+		case base == "scenery_bookcase":
+			return look{ch: '≡', fg: rgb(170, 110, 60)}, true
 		case base == "floor_pit":
 			return look{ch: '^', fg: grey, bg: rgb(15, 15, 15)}, true
 		case parts[0] == "floor" && theme.A > 0:

@@ -184,6 +184,23 @@ func tactician(w *World) (int, int) {
 			w.bot().target = nil // can't get there; forget it
 		}
 	}
+	// Then smash the barrels and crates and search the bookcases in sight, those alongside first.
+	if hunter == nil {
+		for _, d := range dirs {
+			if c := w.Level[p.Y+d[1]][p.X+d[0]]; c == '6' || c == '7' || c == '8' {
+				return d[0], d[1]
+			}
+		}
+		for y, row := range w.Level {
+			for x := range row {
+				if c := row[x]; (c == '6' || c == '7' || c == '8') && w.Visible[y][x] {
+					if dx, dy, ok := w.stepToward(p.X, p.Y, x, y); ok {
+						return dx, dy
+					}
+				}
+			}
+		}
+	}
 	// With the floor's items gathered, visit the merchant on the way to the stairs; botItems shops.
 	if i := strings.IndexByte(strings.Join(w.Level, ""), '$'); i >= 0 && hunter == nil && w.bot().shopped != w.Depth {
 		if dx, dy, ok := w.stepToward(p.X, p.Y, i%mapW, i/mapW); ok {

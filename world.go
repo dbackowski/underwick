@@ -112,10 +112,11 @@ func (k Kind) at(depth int) Kind {
 
 // Tiles, besides '#' wall, '.' floor and '>' stairs down, as generate draws them. A locked door
 // opens to its own open form: iron '1' to '4' with a gold key, magic '2' to '5' with a blue key.
-// An opened chest '&' becomes '0'.
-func blocksSight(c byte) bool { return strings.IndexByte("#+12", c) >= 0 }   // walls and closed doors
-func solid(c byte) bool       { return strings.IndexByte("#+12&$", c) >= 0 } // and chests and the merchant: nothing stands there
-func hazard(c byte) bool      { return strings.IndexByte("~=%^", c) >= 0 }   // water, lava, acid, pits
+// An opened chest '&' becomes '0', a searched bookcase '8' becomes '9', and a smashed barrel '6' or
+// crate '7' becomes floor.
+func blocksSight(c byte) bool { return strings.IndexByte("#+12", c) >= 0 }       // walls and closed doors
+func solid(c byte) bool       { return strings.IndexByte("#+12&$6789", c) >= 0 } // and chests, the merchant and scenery: nothing stands there
+func hazard(c byte) bool      { return strings.IndexByte("~=%^", c) >= 0 }       // water, lava, acid, pits
 
 type Entity struct {
 	Kind
@@ -444,6 +445,7 @@ var tileNames = map[byte]string{
 	'#': "a wall", '.': "the floor", '>': "stairs down", '+': "a closed door", '/': "an open door",
 	'1': "an iron door, locked", '2': "a magic door, locked", '4': "an open iron door", '5': "an open magic door",
 	'&': "a chest", '0': "an empty chest", '$': "a merchant", '~': "water", '=': "lava", '%': "acid", '^': "a pit",
+	'6': "a barrel", '7': "a crate", '8': "a bookcase", '9': "a bare bookcase",
 }
 
 // Describe says what the hero knows of a tile: what stands there, if in sight, with a monster's odds in a
@@ -622,6 +624,44 @@ func (w *World) openChest(x, y int) {
 	w.say("You open the chest.")
 }
 
+// smash breaks a barrel or crate: one in ten holds an item as good as the floor's own, three in ten
+// gold, in small piles. Items are what keep a hero alive, potions above all: at one in three, with
+// bigger piles and more barrels, the bots went a floor deeper and scored 40% more; as it stands, 10-16%.
+func (w *World) smash(x, y int) {
+	what := strings.TrimPrefix(tileNames[w.Level[y][x]], "a ")
+	w.setTile(x, y, '.')
+	var it *Item
+	switch w.rng.IntN(10) {
+	case 0:
+		it = rollItem(w.rng, w.Depth)
+		w.say("You smash the %s. Something was inside.", what)
+	case 1, 2, 3:
+		it = &Item{ItemKind: gold, Amount: (2 + w.rng.IntN(4)) * w.Depth} // a third of a floor's pile
+		w.say("You smash the %s. Gold spills out.", what)
+	default:
+		w.say("You smash the %s. It was empty.", what)
+		return
+	}
+	it.X, it.Y = x, y
+	w.Floor = append(w.Floor, it)
+}
+
+// search goes through a bookcase, once: a third hold a scroll, which drops at the hero's feet.
+func (w *World) search(x, y int) {
+	w.setTile(x, y, '9')
+	if w.rng.IntN(3) > 0 {
+		w.say("You search the bookcase. Nothing.")
+		return
+	}
+	it := rollItem(w.rng, w.Depth)
+	for it.Class != 's' {
+		it = rollItem(w.rng, w.Depth)
+	}
+	it.X, it.Y = w.Player.X, w.Player.Y
+	w.Floor = append(w.Floor, it)
+	w.say("You find a %s.", w.ItemName(it))
+}
+
 func (w *World) playerAct(dx, dy int) {
 	p := w.Player
 	if p.Confused > 0 && w.rng.IntN(2) == 0 {
@@ -643,6 +683,10 @@ func (w *World) playerAct(dx, dy int) {
 		w.unlock(tx, ty, c)
 	case c == '&':
 		w.openChest(tx, ty)
+	case c == '6' || c == '7':
+		w.smash(tx, ty)
+	case c == '8':
+		w.search(tx, ty)
 	case w.free(tx, ty):
 		p.X, p.Y, p.Anim = tx, ty, "walk"
 		switch w.Level[ty][tx] {

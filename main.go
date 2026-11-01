@@ -930,6 +930,12 @@ func tileSprite(c byte, th theme, frame int) string {
 		return "object_chest_closed"
 	case '0':
 		return "object_chest_empty"
+	case '6':
+		return "scenery_barrel"
+	case '7':
+		return "scenery_crate"
+	case '8', '9':
+		return "scenery_bookcase"
 	}
 	return "floor_" + th.floor
 }

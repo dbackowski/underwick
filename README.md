@@ -109,6 +109,8 @@ Each floor is generated, 40x30 tiles, and you only see what you can see: explore
 dimmed. Walk into a door to open it; closed doors block sight, and monsters open them too. A dead-end
 room may be a vault behind an iron door (it needs the gold key) or a magic door (the blue key), with the
 key lying elsewhere on the floor and a chest of better loot inside.
+Barrels, crates and bookcases stand in some rooms' corners: walk into a barrel or crate to smash it (some
+hold gold, a few an item), or into a bookcase to search it, once, for a scroll.
 
 Some rooms hold pools that monsters never enter: deep water slows you, giving monsters an extra turn;
 acid burns each turn you stand in it; lava burns badly, so you are warned and must move again to step
