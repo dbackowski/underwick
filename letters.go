@@ -109,6 +109,10 @@ func lookOf(name string) (look, bool) {
 			return look{ch: '0', fg: rgb(170, 110, 60)}, true
 		case base == "scenery_crate":
 			return look{ch: '%', fg: rgb(190, 140, 80)}, true
+		case strings.HasPrefix(base, "scenery_firepit_lit"):
+			return look{ch: '_', fg: rgb(255, 150, 40)}, true
+		case base == "scenery_firepit":
+			return look{ch: '_', fg: grey}, true
 		case base == "scenery_bookcase":
 			return look{ch: '≡', fg: rgb(170, 110, 60)}, true
 		case base == "floor_pit":

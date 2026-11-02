@@ -184,16 +184,17 @@ func tactician(w *World) (int, int) {
 			w.bot().target = nil // can't get there; forget it
 		}
 	}
-	// Then smash the barrels and crates and search the bookcases in sight, those alongside first.
+	// Then smash the barrels and crates, search the bookcases and pray at the shrines in sight, those
+	// alongside first.
 	if hunter == nil {
 		for _, d := range dirs {
-			if c := w.Level[p.Y+d[1]][p.X+d[0]]; c == '6' || c == '7' || c == '8' {
+			if c := w.Level[p.Y+d[1]][p.X+d[0]]; c == '6' || c == '7' || c == '8' || c == '_' {
 				return d[0], d[1]
 			}
 		}
 		for y, row := range w.Level {
 			for x := range row {
-				if c := row[x]; (c == '6' || c == '7' || c == '8') && w.Visible[y][x] {
+				if c := row[x]; (c == '6' || c == '7' || c == '8' || c == '_') && w.Visible[y][x] {
 					if dx, dy, ok := w.stepToward(p.X, p.Y, x, y); ok {
 						return dx, dy
 					}

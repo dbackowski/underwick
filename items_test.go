@@ -145,7 +145,7 @@ func TestSpritesExist(t *testing.T) {
 	for _, st := range []string{"sleep", "confuse", "poisoned", "alert"} {
 		names = append(names, "FX/status_"+st+"_1", "FX/status_"+st+"_2")
 	}
-	for _, c := range "#.>+/1425~=%^&06789" {
+	for _, c := range "#.>+/1425~=%^&06789_3" {
 		names = append(names, "World/"+tileSprite(byte(c), themes[0], 1))
 	}
 	for _, th := range themes {

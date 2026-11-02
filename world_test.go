@@ -154,13 +154,13 @@ func TestGenerate(t *testing.T) {
 			seen := map[int]bool{start: true}
 			for queue := []int{start}; len(queue) > 0; queue = queue[1:] {
 				for _, n := range []int{queue[0] - 1, queue[0] + 1, queue[0] - mapW, queue[0] + mapW} {
-					if all[n] != '#' && !strings.ContainsRune("678", rune(all[n])) && !seen[n] {
+					if all[n] != '#' && !strings.ContainsRune("678_", rune(all[n])) && !seen[n] {
 						seen[n] = true
 						queue = append(queue, n)
 					}
 				}
 			}
-			scenery := strings.Count(all, "6") + strings.Count(all, "7") + strings.Count(all, "8")
+			scenery := strings.Count(all, "6") + strings.Count(all, "7") + strings.Count(all, "8") + strings.Count(all, "_")
 			// Nor may they cut a dry way, the only kind monsters and the bots take.
 			sx, sy := start%mapW, start/mapW
 			dry := walkable(func(x, y int) byte { return level[y][x] }, sx, sy)
@@ -514,5 +514,42 @@ func TestScenery(t *testing.T) {
 		if its := w.ItemsAt(1, 1); len(its) > 0 && its[0].Class != 's' {
 			t.Fatalf("a bookcase should only hold scrolls, got a %s", its[0].Name)
 		}
+	}
+}
+
+func TestShrine(t *testing.T) {
+	seen := map[string]bool{}
+	for seed := range uint64(30) {
+		w := NewWorld([]string{"#####", "#._.#", "#.@.#", "#...#", "#####"})
+		w.rng = rand.New(rand.NewPCG(seed, 0))
+		w.Player.HP = 1
+		w.Step(0, -1)
+		if w.Level[1][2] != '3' || w.Player.Y != 2 {
+			t.Fatalf("praying should leave a cold shrine in the way, got %q", w.Level[1])
+		}
+		switch {
+		case w.ExpLevel == 2:
+			seen["level"] = true
+		case len(w.Monsters) == 1:
+			seen["monster"] = true
+		case w.Player.HP == w.Player.MaxHP:
+			seen["healed"] = true
+		default:
+			t.Fatalf("seed %d: praying did nothing: %q", seed, w.Log)
+		}
+		w.Step(0, -1)
+		if w.ExpLevel > 2 || len(w.Monsters) > 1 {
+			t.Fatal("a cold shrine should answer no more prayers")
+		}
+	}
+	if len(seen) != 3 {
+		t.Fatalf("30 prayers should heal, give a level and bring a monster, got %v", seen)
+	}
+	found := 0
+	for seed := range uint64(20) {
+		found += strings.Count(strings.Join(generate(rand.New(rand.NewPCG(seed, 0)), 3, 0), ""), "_")
+	}
+	if found == 0 {
+		t.Fatal("20 floors should hold a shrine between them")
 	}
 }

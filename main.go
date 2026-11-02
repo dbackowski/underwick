@@ -936,6 +936,10 @@ func tileSprite(c byte, th theme, frame int) string {
 		return "scenery_crate"
 	case '8', '9':
 		return "scenery_bookcase"
+	case '_':
+		return fmt.Sprintf("scenery_firepit_lit_%d", frame)
+	case '3':
+		return "scenery_firepit"
 	}
 	return "floor_" + th.floor
 }

@@ -113,10 +113,10 @@ func (k Kind) at(depth int) Kind {
 // Tiles, besides '#' wall, '.' floor and '>' stairs down, as generate draws them. A locked door
 // opens to its own open form: iron '1' to '4' with a gold key, magic '2' to '5' with a blue key.
 // An opened chest '&' becomes '0', a searched bookcase '8' becomes '9', and a smashed barrel '6' or
-// crate '7' becomes floor.
-func blocksSight(c byte) bool { return strings.IndexByte("#+12", c) >= 0 }       // walls and closed doors
-func solid(c byte) bool       { return strings.IndexByte("#+12&$6789", c) >= 0 } // and chests, the merchant and scenery: nothing stands there
-func hazard(c byte) bool      { return strings.IndexByte("~=%^", c) >= 0 }       // water, lava, acid, pits
+// crate '7' becomes floor, and a shrine '_' prayed at goes cold, '3'.
+func blocksSight(c byte) bool { return strings.IndexByte("#+12", c) >= 0 }         // walls and closed doors
+func solid(c byte) bool       { return strings.IndexByte("#+12&$6789_3", c) >= 0 } // and chests, the merchant and scenery: nothing stands there
+func hazard(c byte) bool      { return strings.IndexByte("~=%^", c) >= 0 }         // water, lava, acid, pits
 
 type Entity struct {
 	Kind
@@ -446,6 +446,7 @@ var tileNames = map[byte]string{
 	'1': "an iron door, locked", '2': "a magic door, locked", '4': "an open iron door", '5': "an open magic door",
 	'&': "a chest", '0': "an empty chest", '$': "a merchant", '~': "water", '=': "lava", '%': "acid", '^': "a pit",
 	'6': "a barrel", '7': "a crate", '8': "a bookcase", '9': "a bare bookcase",
+	'_': "a shrine", '3': "a cold shrine",
 }
 
 // Describe says what the hero knows of a tile: what stands there, if in sight, with a monster's odds in a
@@ -662,6 +663,39 @@ func (w *World) search(x, y int) {
 	w.say("You find a %s.", w.ItemName(it))
 }
 
+// pray at a shrine, once, puts the hero in the hands of its fire: a third of the time it heals,
+// a third it gives a level, and a third it spits out one of the floor's monsters beside the hero.
+func (w *World) pray(x, y int) {
+	w.setTile(x, y, '3')
+	switch w.rng.IntN(3) {
+	case 0:
+		w.heal(w.Player, w.Player.MaxHP)
+		w.Mana = w.MaxMana
+		w.say("You pray. Warmth fills you.")
+	case 1:
+		w.say("You pray. The fire flares.")
+		w.gainXP(xpFor(w.ExpLevel) - w.XP)
+	default:
+		p := w.Player
+		var spots [][2]int
+		for _, d := range dirs {
+			if tx, ty := p.X+d[0], p.Y+d[1]; w.free(tx, ty) && !hazard(w.Level[ty][tx]) {
+				spots = append(spots, [2]int{tx, ty})
+			}
+		}
+		if len(spots) == 0 {
+			w.say("You pray. The fire gutters out.")
+			return
+		}
+		s := spots[w.rng.IntN(len(spots))]
+		pool := spawnable(w.Depth)
+		m := newEntity(kinds[pool[w.rng.IntN(len(pool))]].at(w.Depth), s[0], s[1])
+		m.hunting, m.goalX, m.goalY = true, p.X, p.Y
+		w.Monsters = append(w.Monsters, m)
+		w.say("You pray. The %s steps out of the fire!", m.Name)
+	}
+}
+
 func (w *World) playerAct(dx, dy int) {
 	p := w.Player
 	if p.Confused > 0 && w.rng.IntN(2) == 0 {
@@ -687,6 +721,8 @@ func (w *World) playerAct(dx, dy int) {
 		w.smash(tx, ty)
 	case c == '8':
 		w.search(tx, ty)
+	case c == '_':
+		w.pray(tx, ty)
 	case w.free(tx, ty):
 		p.X, p.Y, p.Anim = tx, ty, "walk"
 		switch w.Level[ty][tx] {

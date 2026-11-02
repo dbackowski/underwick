@@ -39,14 +39,15 @@ func (r room) ring() [][4]int {
 //	+  door           1  iron door, locked (gold key)          2  magic door, locked (blue key)
 //	~  deep water     =  lava              %  acid             ^  pit
 //	$  the merchant   6  barrel            7  crate            8  bookcase (9 once searched)
+//	_  shrine (3 once prayed at)
 //
 // and a kind letter for each monster. Rooms are joined by corridors, often through doors. The hero
 // starts in the first room and the stairs are in the room farthest from it; with a boss (its kind
 // character, or 0 for none) the boss takes the stairs' place, and they open when it dies. A dead-end
 // room may be a locked vault with a chest, its key elsewhere on the floor. Other rooms may hold a
 // pool of water, acid, lava or pits, always leaving the room's edge walkable. On a shop floor (see
-// shopFloor) a merchant stands in the middle of a room with no pool. Barrels, crates and bookcases
-// stand in some rooms' corners.
+// shopFloor) a merchant stands in the middle of a room with no pool; a third of floors have a shrine
+// in the middle of another. Barrels, crates and bookcases stand in some rooms' corners.
 func generate(rng *rand.Rand, depth int, boss byte) []string {
 	for {
 		g := make([][]byte, mapH)
@@ -133,12 +134,20 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 				shop = i
 			}
 		}
+		shrine := -1
+		if rng.IntN(3) == 0 {
+			for i := 1; i < len(rooms) && shrine < 0; i++ {
+				if i != far && i != vault && i != shop {
+					shrine = i
+				}
+			}
+		}
 
 		// Hazard pools fill parts of rooms' insides, never their edges, so every entrance still
 		// connects to every other along the edge.
 		pooled := map[int]bool{}
 		for i, r := range rooms {
-			if i == 0 || i == far || i == vault || rng.IntN(3) > 0 || i == shop {
+			if i == 0 || i == far || i == vault || rng.IntN(3) > 0 || i == shop || i == shrine {
 				continue
 			}
 			pool := "~"
@@ -166,7 +175,7 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 		// block a corridor coming in. Never in a room with a pool: its edge is the only dry way round,
 		// and two corners taken would cut it.
 		for i, r := range rooms {
-			if i == vault || i == shop || pooled[i] {
+			if i == vault || i == shop || i == shrine || pooled[i] {
 				continue
 			}
 			for _, x := range []int{r.x, r.x + r.w - 1} {
@@ -189,6 +198,10 @@ func generate(rng *rand.Rand, depth int, boss byte) []string {
 		if shop >= 0 {
 			mx, my := rooms[shop].center()
 			g[my][mx] = '$'
+		}
+		if shrine >= 0 {
+			mx, my := rooms[shrine].center()
+			g[my][mx] = '_'
 		}
 		fx, fy := rooms[far].center()
 		g[fy][fx] = '>'
