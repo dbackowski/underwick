@@ -9,7 +9,7 @@ dungeon below Underwick as far as you can. Death is permanent, and the dungeon h
 desktop as below.
 
 <table><tr>
-<td><img src="docs/screenshots/fight.png" alt="A boss and its pack, with the odds of fighting a bat"></td>
+<td><img src="docs/screenshots/fight.png" alt="A shrine and a crate, with the odds of fighting a goblin"></td>
 <td><img src="docs/screenshots/shop.png" alt="The merchant's wares"></td>
 <td><img src="docs/screenshots/recap.png" alt="The recap of a dead mage's run"></td>
 </tr></table>
